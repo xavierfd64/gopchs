@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+/*
+ * Go PCHS design tokens.
+ * Colors extracted from the approved Main Website UI reference and the
+ * official PCHS seal (deep institutional green + gold, refined for
+ * accessible contrast). Shared across the whole ecosystem — future
+ * portals should reuse these tokens rather than introducing new palettes.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-heading);
+
+  /* Institutional green scale */
+  --color-pchs-green-950: #061810;
+  --color-pchs-green-900: #0a2417;
+  --color-pchs-green-800: #0e3320;
+  --color-pchs-green-700: #124228;
+  --color-pchs-green-600: #17572f;
+  --color-pchs-green-500: #1d6b3a;
+
+  /* Gold / accent scale */
+  --color-pchs-gold-600: #b8860f;
+  --color-pchs-gold-500: #d4a017;
+  --color-pchs-gold-400: #e8b923;
+  --color-pchs-gold-300: #f2cb52;
+
+  /* Neutrals */
+  --color-pchs-cream: #f7f6f2;
+  --color-pchs-ink: #1a1a18;
+
+  --radius-card: 0.75rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-heading), Georgia, "Times New Roman", serif;
+}
