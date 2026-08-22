@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { ArrowRightIcon } from "@/components/ui/icons";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost";
 type ButtonSize = "sm" | "md" | "lg";
@@ -41,6 +42,12 @@ type ButtonAsLink = CommonProps &
 
 type ButtonProps = ButtonAsButton | ButtonAsLink;
 
+const arrowCircleSize: Record<ButtonSize, string> = {
+  sm: "h-5 w-5",
+  md: "h-6 w-6",
+  lg: "h-7 w-7",
+};
+
 export function Button({
   variant = "primary",
   size = "md",
@@ -55,18 +62,35 @@ export function Button({
     className,
   );
 
+  const content =
+    variant === "primary" ? (
+      <>
+        {children}
+        <span
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-full bg-pchs-green-950 text-white",
+            arrowCircleSize[size],
+          )}
+        >
+          <ArrowRightIcon className="h-3.5 w-3.5" strokeWidth={2.5} />
+        </span>
+      </>
+    ) : (
+      children
+    );
+
   if ("href" in props && props.href) {
     const { href, ...rest } = props;
     return (
       <Link href={href} className={classes} {...rest}>
-        {children}
+        {content}
       </Link>
     );
   }
 
   return (
     <button className={classes} {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}>
-      {children}
+      {content}
     </button>
   );
 }

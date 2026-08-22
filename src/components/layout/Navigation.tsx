@@ -18,7 +18,7 @@ export function Navigation() {
 
   return (
     <nav aria-label="Primary" className="hidden lg:block">
-      <ul className="flex items-center gap-1">
+      <ul className="flex items-center gap-0.5 xl:gap-1">
         {primaryNav.map((item) => {
           const hasChildren = !!item.children?.length;
           const isOpen = openKey === item.label;
@@ -36,7 +36,7 @@ export function Navigation() {
               <Link
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-1 rounded-md px-3 py-2 text-sm font-semibold uppercase tracking-wide transition-colors hover:bg-pchs-green-900/5 hover:text-pchs-green-700",
+                  "flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-2 text-[13px] font-semibold uppercase tracking-wide transition-colors hover:bg-pchs-green-900/5 hover:text-pchs-green-700",
                   isActive
                     ? "text-pchs-green-900 after:absolute after:inset-x-3 after:-bottom-[1px] after:h-0.5 after:rounded-full after:bg-pchs-gold-500 after:content-['']"
                     : "text-pchs-green-900/85",
