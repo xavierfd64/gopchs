@@ -1,4 +1,3 @@
-import Image from "next/image";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Button } from "@/components/ui/Button";
@@ -21,38 +20,26 @@ export function AboutPreview() {
           </div>
         </div>
 
-        <div>
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-card border border-black/5 shadow-sm">
-            <Image
-              src="/assets/images/campus/pchs-campus.jpg"
-              alt={`${siteConfig.schoolName} campus`}
-              fill
-              sizes="(min-width: 1024px) 40vw, 100vw"
-              className="object-cover"
-            />
-          </div>
-
-          <dl className="mt-4 grid grid-cols-2 gap-4">
-            {[
-              { label: "Vision", value: "Nation-Building Filipinos" },
-              { label: "Mission", value: "Quality, Equitable Education" },
-              { label: "Founded", value: "June 6, 2005" },
-              { label: "Community", value: "Pura, Tarlac" },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="rounded-card border border-black/5 bg-pchs-cream p-4"
-              >
-                <dt className="text-xs font-bold uppercase tracking-wide text-pchs-gold-600">
-                  {item.label}
-                </dt>
-                <dd className="mt-1 text-sm font-semibold text-pchs-green-900">
-                  {item.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </div>
+        <dl className="grid grid-cols-2 gap-4">
+          {[
+            { label: "Vision", value: "Nation-Building Filipinos" },
+            { label: "Mission", value: "Quality, Equitable Education" },
+            { label: "Founded", value: "June 6, 2005" },
+            { label: "Community", value: "Pura, Tarlac" },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-card border border-black/5 bg-pchs-cream p-4"
+            >
+              <dt className="text-xs font-bold uppercase tracking-wide text-pchs-gold-600">
+                {item.label}
+              </dt>
+              <dd className="mt-1 text-sm font-semibold text-pchs-green-900">
+                {item.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </Container>
     </section>
   );

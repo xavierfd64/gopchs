@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +15,17 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <>
+      <div className="relative aspect-[21/9] w-full overflow-hidden">
+        <Image
+          src="/assets/images/campus/pchs-campus.jpg"
+          alt={`${siteConfig.schoolName} campus`}
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
+      </div>
+
       <div className="bg-pchs-cream py-14 sm:py-20">
         <Container>
           <SectionHeading

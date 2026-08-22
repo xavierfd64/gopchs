@@ -174,3 +174,71 @@ export function NetworkIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function EyeIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+export function TargetIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function HandshakeIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M2 12.5 6 9l3 2.3" />
+      <path d="m6 9 5.2 4.6a1.5 1.5 0 0 0 2.1-.1l.2-.2a1.4 1.4 0 0 0-.1-2L9.5 7.5" />
+      <path d="M22 12.5 18 9l-3.2 2.5" />
+      <path d="m18 9-5.2 4.6" />
+      <path d="M9 11.3 6.5 13.5a1.4 1.4 0 0 0 0 2 1.4 1.4 0 0 0 2 0" />
+      <path d="M10.7 13.4 9.5 14.5a1.4 1.4 0 0 0 0 2 1.4 1.4 0 0 0 2 0l.3-.3" />
+    </svg>
+  );
+}
+
+export function ShieldIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12 3 4 6v6c0 4.5 3.2 7.6 8 9 4.8-1.4 8-4.5 8-9V6l-8-3Z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
+  );
+}
+
+export function HeartCheckIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M12.5 20.2c-.3.2-.7.2-1 0C7.8 18 4 14.7 4 10.8 4 8.2 6 6 8.6 6c1.4 0 2.7.7 3.4 1.8C12.7 6.7 14 6 15.4 6 18 6 20 8.2 20 10.8c0 .5-.06 1-.18 1.4" />
+      <path d="m15.5 15.5 2 2 3.5-4" />
+    </svg>
+  );
+}
+
+export function CheckIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m5 13 4 4L19 7" />
+    </svg>
+  );
+}
+
+export function SchoolBadgeIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 13.5V16c0 .8 1.8 1.5 4 1.5s4-.7 4-1.5v-2.5" />
+      <path d="m12 7-6 3 6 3 6-3-6-3Z" />
+    </svg>
+  );
+}

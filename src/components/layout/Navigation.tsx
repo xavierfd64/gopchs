@@ -2,12 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { primaryNav } from "@/lib/navigation";
 import { ChevronDownIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 
+function isActiveHref(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function Navigation() {
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const pathname = usePathname();
 
   return (
     <nav aria-label="Primary" className="hidden lg:block">
@@ -15,6 +22,9 @@ export function Navigation() {
         {primaryNav.map((item) => {
           const hasChildren = !!item.children?.length;
           const isOpen = openKey === item.label;
+          const isActive =
+            isActiveHref(pathname, item.href) ||
+            (item.children?.some((child) => isActiveHref(pathname, child.href)) ?? false);
 
           return (
             <li
@@ -26,10 +36,14 @@ export function Navigation() {
               <Link
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-1 rounded-md px-3 py-2 text-sm font-semibold uppercase tracking-wide text-pchs-green-900 transition-colors hover:bg-pchs-green-900/5 hover:text-pchs-green-700",
+                  "flex items-center gap-1 rounded-md px-3 py-2 text-sm font-semibold uppercase tracking-wide transition-colors hover:bg-pchs-green-900/5 hover:text-pchs-green-700",
+                  isActive
+                    ? "text-pchs-green-900 after:absolute after:inset-x-3 after:-bottom-[1px] after:h-0.5 after:rounded-full after:bg-pchs-gold-500 after:content-['']"
+                    : "text-pchs-green-900/85",
                 )}
                 aria-haspopup={hasChildren || undefined}
                 aria-expanded={hasChildren ? isOpen : undefined}
+                aria-current={isActive ? "page" : undefined}
                 onFocus={() => hasChildren && setOpenKey(item.label)}
               >
                 {item.label}

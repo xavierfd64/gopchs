@@ -16,17 +16,24 @@ export function Header() {
           <Image
             src={siteConfig.logo}
             alt={`${siteConfig.schoolName} logo`}
-            width={56}
-            height={56}
-            className="h-12 w-12 shrink-0 sm:h-14 sm:w-14"
+            width={72}
+            height={72}
+            className="h-14 w-14 shrink-0 sm:h-16 sm:w-16"
             priority
           />
           <span className="leading-tight">
-            <span className="block font-display text-lg font-extrabold text-pchs-green-900 sm:text-xl">
+            <span className="block font-display text-xl font-extrabold text-pchs-green-900 sm:text-2xl">
               <span className="text-pchs-gold-500">Go</span> PCHS
             </span>
-            <span className="block text-[11px] font-semibold uppercase tracking-wide text-pchs-ink/70 sm:text-xs">
+            <span className="block text-[11px] font-bold uppercase tracking-wide text-pchs-ink/80 sm:text-xs">
               {siteConfig.schoolName}
+            </span>
+            <span className="block text-[11px] text-pchs-ink/50 sm:text-xs">
+              Est. {new Date(siteConfig.founded).toLocaleDateString("en-US", {
+                month: "long",
+                day: "numeric",
+                year: "numeric",
+              })}
             </span>
           </span>
         </Link>

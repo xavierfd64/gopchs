@@ -1,8 +1,9 @@
 import { Container } from "@/components/ui/Container";
 import {
-  ClipboardCheckIcon,
-  GraduationCapIcon,
-  UsersIcon,
+  EyeIcon,
+  TargetIcon,
+  HandshakeIcon,
+  CheckIcon,
 } from "@/components/ui/icons";
 
 const coreValues = ["Maka-Diyos", "Makatao", "Makakalikasan", "Makabansa"];
@@ -14,7 +15,7 @@ export function VisionMissionSection() {
         <div>
           <div className="mb-4 flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-pchs-gold-400 text-pchs-gold-400">
-              <GraduationCapIcon className="h-5 w-5" />
+              <EyeIcon className="h-5 w-5" />
             </span>
             <h3 className="font-display text-lg font-bold uppercase tracking-wide text-pchs-gold-400">
               Our Vision
@@ -30,7 +31,7 @@ export function VisionMissionSection() {
         <div>
           <div className="mb-4 flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-pchs-gold-400 text-pchs-gold-400">
-              <ClipboardCheckIcon className="h-5 w-5" />
+              <TargetIcon className="h-5 w-5" />
             </span>
             <h3 className="font-display text-lg font-bold uppercase tracking-wide text-pchs-gold-400">
               Our Mission
@@ -47,16 +48,16 @@ export function VisionMissionSection() {
         <div>
           <div className="mb-4 flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-pchs-gold-400 text-pchs-gold-400">
-              <UsersIcon className="h-5 w-5" />
+              <HandshakeIcon className="h-5 w-5" />
             </span>
             <h3 className="font-display text-lg font-bold uppercase tracking-wide text-pchs-gold-400">
               Our Core Values
             </h3>
           </div>
-          <ul className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-white/80">
+          <ul className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm text-white/80">
             {coreValues.map((value) => (
               <li key={value} className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-pchs-gold-400" />
+                <CheckIcon className="h-4 w-4 shrink-0 text-pchs-gold-400" />
                 {value}
               </li>
             ))}

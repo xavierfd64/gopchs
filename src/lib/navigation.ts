@@ -30,6 +30,5 @@ export const primaryNav: NavItem[] = [
     ],
   },
   { label: "Publication", href: "/publication" },
-  { label: "Portals", href: "/portals" },
   { label: "Contact", href: "/contact" },
 ];
