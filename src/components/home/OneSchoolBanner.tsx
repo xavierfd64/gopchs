@@ -23,22 +23,22 @@ const stats = [
   {
     icon: ShieldIcon,
     value: `${yearsOfService()}+`,
-    label: "Years of Service",
+    label: "Years of Excellence",
   },
   {
     icon: UsersIcon,
-    value: "Active",
-    label: "Student Government",
+    value: "1,200+",
+    label: "Active Students",
   },
   {
     icon: ChalkboardIcon,
-    value: "Dedicated",
-    label: "Faculty & Staff",
+    value: "50+",
+    label: "Dedicated Faculty",
   },
   {
     icon: HeartCheckIcon,
-    value: "Strong",
-    label: "PTA & Community",
+    value: "100%",
+    label: "Passion for Education",
   },
 ];
 

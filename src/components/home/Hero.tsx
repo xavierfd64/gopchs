@@ -6,67 +6,57 @@ import { PortalQuickAccess } from "@/components/home/PortalQuickAccess";
 
 export function Hero() {
   return (
-    <section className="bg-white pt-6 pb-10 sm:pt-8 sm:pb-14">
-      <Container>
-        <div className="relative">
-          <GoldSwoosh
-            aria-hidden="true"
-            className="pointer-events-none absolute -bottom-8 -left-8 h-40 w-56 text-pchs-gold-400/70 sm:-bottom-12 sm:-left-12 sm:h-56 sm:w-80"
-          />
+    <>
+      <section className="relative h-[480px] w-full overflow-hidden sm:h-[600px]">
+        <Image
+          src="/assets/images/hero/pchs-campus-hero.jpg"
+          alt={`${siteConfig.schoolName} campus`}
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-gradient-to-b from-pchs-green-900/95 via-pchs-green-900/75 to-pchs-green-900/40 sm:bg-gradient-to-r sm:from-pchs-green-900 sm:via-pchs-green-900/85 sm:to-pchs-green-900/10"
+        />
+        <GoldSwoosh
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-6 left-0 h-32 w-48 text-pchs-gold-500/80 sm:h-40 sm:w-64"
+        />
 
-          <div className="relative overflow-hidden rounded-3xl shadow-2xl">
-            <div className="grid bg-pchs-green-950 text-white lg:grid-cols-2">
-              <div className="relative z-10 flex flex-col justify-center px-6 py-12 sm:px-10 sm:py-16 lg:py-20">
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -left-16 top-1/3 h-64 w-64 rounded-full bg-pchs-gold-500/10 blur-3xl"
-                />
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-pchs-gold-400 sm:text-sm">
-                  {siteConfig.schoolName} &middot; Est.{" "}
-                  {new Date(siteConfig.founded).getFullYear()}
-                </p>
-                <h1 className="mt-4 font-display font-black leading-[0.95]">
-                  <span className="block text-2xl sm:text-3xl lg:text-4xl">
-                    Building
-                  </span>
-                  <span className="block text-5xl uppercase sm:text-6xl lg:text-7xl">
-                    Champions
-                  </span>
-                  <span className="block text-5xl text-pchs-gold-400 sm:text-6xl lg:text-7xl">
-                    for Life!
-                  </span>
-                </h1>
-                <p className="mt-6 max-w-md text-base leading-relaxed text-white/75 sm:text-lg">
-                  Empowering learners today for a better tomorrow. One PCHS,
-                  one family, <span className="text-pchs-gold-400">one future.</span>
-                </p>
-                <div className="mt-8 flex flex-wrap gap-4">
-                  <Button href="/about" size="lg">
-                    Learn More About PCHS
-                  </Button>
-                  <Button href="/portals" variant="outline" size="lg">
-                    Visit a Portal
-                  </Button>
-                </div>
-              </div>
-
-              <div className="relative aspect-[4/3] lg:aspect-auto">
-                <Image
-                  src="/assets/images/hero/pchs-campus-hero.jpg"
-                  alt={`${siteConfig.schoolName} campus`}
-                  fill
-                  priority
-                  sizes="(min-width: 1024px) 50vw, 100vw"
-                  className="object-cover object-[80%_60%]"
-                />
-              </div>
+        <Container className="relative z-10 flex h-full items-center">
+          <div className="max-w-xl text-white">
+            <p className="text-xs font-bold uppercase tracking-[0.3em] text-pchs-gold-400 sm:text-sm">
+              {siteConfig.schoolName} &middot; Est.{" "}
+              {new Date(siteConfig.founded).getFullYear()}
+            </p>
+            <h1 className="mt-4 font-display font-black leading-[0.95]">
+              <span className="block text-2xl sm:text-3xl lg:text-4xl">
+                Building
+              </span>
+              <span className="block text-5xl uppercase sm:text-6xl lg:text-7xl">
+                Champions
+              </span>
+              <span className="block text-5xl text-pchs-gold-400 sm:text-6xl lg:text-7xl">
+                for Life!
+              </span>
+            </h1>
+            <p className="mt-6 text-base leading-relaxed text-white/85 sm:text-lg">
+              Empowering learners today for a better tomorrow. One PCHS, one
+              family, <span className="text-pchs-gold-400">one future.</span>
+            </p>
+            <div className="mt-8">
+              <Button href="/about" size="lg">
+                Learn More About PCHS
+              </Button>
             </div>
-
-            <PortalQuickAccess />
           </div>
-        </div>
-      </Container>
-    </section>
+        </Container>
+      </section>
+
+      <PortalQuickAccess />
+    </>
   );
 }
 

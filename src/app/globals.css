@@ -1,53 +1,49 @@
 @import "tailwindcss";
 
 /*
- * Go PCHS design tokens.
- * Colors extracted from the approved Main Website UI reference and the
- * official PCHS seal (deep institutional green + gold, refined for
- * accessible contrast). Shared across the whole ecosystem — future
- * portals should reuse these tokens rather than introducing new palettes.
+ * Go PCHS design tokens — exact values from the approved UI fidelity
+ * spec (deep institutional green + gold). Shared across the whole
+ * ecosystem — future portals should reuse these tokens rather than
+ * introducing new palettes.
  */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fefefe;
+  --foreground: #222222;
 }
 
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-body);
-  --font-display: var(--font-heading);
+  --font-display: var(--font-body);
 
-  /* Institutional green scale */
-  --color-pchs-green-950: #061810;
-  --color-pchs-green-900: #0a2417;
-  --color-pchs-green-800: #0e3320;
-  --color-pchs-green-700: #124228;
-  --color-pchs-green-600: #17572f;
-  --color-pchs-green-500: #1d6b3a;
+  /* Institutional green scale (primary #0B3B2E, secondary #0D5A40 per spec) */
+  --color-pchs-green-950: #071f17;
+  --color-pchs-green-900: #0b3b2e;
+  --color-pchs-green-800: #0d4536;
+  --color-pchs-green-700: #0d5a40;
+  --color-pchs-green-600: #147049;
+  --color-pchs-green-500: #1c8557;
 
-  /* Gold / accent scale */
-  --color-pchs-gold-600: #b8860f;
-  --color-pchs-gold-500: #d4a017;
-  --color-pchs-gold-400: #e8b923;
-  --color-pchs-gold-300: #f2cb52;
+  /* Gold / accent scale (accent #F1B21A per spec) */
+  --color-pchs-gold-600: #c4930e;
+  --color-pchs-gold-500: #f1b21a;
+  --color-pchs-gold-400: #f5c34d;
+  --color-pchs-gold-300: #f8d687;
 
   /* Neutrals */
-  --color-pchs-cream: #f7f6f2;
-  --color-pchs-ink: #1a1a18;
+  --color-pchs-cream: #f3f4f6;
+  --color-pchs-ink: #222222;
+  --color-pchs-border: #e5e7eb;
 
-  --radius-card: 0.75rem;
+  --radius-card: 1rem;
+  --radius-hero: 1.375rem;
+
+  --shadow-elevated: 0 10px 24px rgba(0, 0, 0, 0.15);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-body), Arial, Helvetica, sans-serif;
-}
-
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-heading), Georgia, "Times New Roman", serif;
 }

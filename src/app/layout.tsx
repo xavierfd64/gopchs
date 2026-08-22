@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
-import { Inter, Merriweather } from "next/font/google";
+import { Montserrat } from "next/font/google";
 import { siteConfig } from "@/lib/config";
 import { PageLayout } from "@/components/layout/PageLayout";
 import "./globals.css";
 
-const bodyFont = Inter({
+const bodyFont = Montserrat({
   variable: "--font-body",
-  subsets: ["latin"],
-});
-
-const headingFont = Merriweather({
-  variable: "--font-heading",
-  weight: ["700", "900"],
+  weight: ["400", "500", "600", "700", "800", "900"],
   subsets: ["latin"],
 });
 
@@ -35,10 +30,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${bodyFont.variable} ${headingFont.variable} h-full antialiased`}
-    >
+    <html lang="en" className={`${bodyFont.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <PageLayout>{children}</PageLayout>
       </body>
