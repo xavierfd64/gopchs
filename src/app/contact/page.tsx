@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
-import { siteConfig } from "@/lib/config";
+import { siteConfig, socialLinks } from "@/lib/config";
+import { FacebookIcon } from "@/components/ui/icons";
 
 export const metadata: Metadata = {
   title: "Contact Us",
@@ -27,6 +29,22 @@ export default function ContactPage() {
 
         <div className="mt-10 grid gap-8 lg:grid-cols-2">
           <dl className="grid gap-4 sm:grid-cols-2">
+            {socialLinks.facebook && (
+              <div className="rounded-card border border-black/5 bg-pchs-cream p-4">
+                <dt className="text-xs font-bold uppercase tracking-wide text-pchs-gold-600">
+                  Official Facebook Page
+                </dt>
+                <dd className="mt-1 text-sm">
+                  <Link
+                    href={socialLinks.facebook}
+                    className="inline-flex items-center gap-1.5 font-semibold text-pchs-green-800 hover:text-pchs-gold-600"
+                  >
+                    <FacebookIcon className="h-4 w-4" />
+                    facebook.com/puracentralhigh
+                  </Link>
+                </dd>
+              </div>
+            )}
             {fields.map((field) => (
               <div
                 key={field.label}

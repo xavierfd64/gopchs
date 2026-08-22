@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -26,7 +27,18 @@ export default function NewsPage() {
         <div className="mt-10 grid gap-10 lg:grid-cols-[2fr_1fr]">
           <div className="grid gap-5 sm:grid-cols-2">
             {news.map((article) => (
-              <Card key={article.slug}>
+              <Card key={article.slug} className="overflow-hidden">
+                {article.coverImage && (
+                  <div className="relative aspect-video w-full">
+                    <Image
+                      src={article.coverImage}
+                      alt={article.title}
+                      fill
+                      sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                      className="object-cover"
+                    />
+                  </div>
+                )}
                 <CardBody>
                   <Badge tone="green">{article.category}</Badge>
                   <h2 className="mt-3 font-display text-lg font-bold text-pchs-green-900">

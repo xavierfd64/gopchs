@@ -26,7 +26,7 @@ export const siteConfig = {
   url:
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
     `https://www.${PRODUCTION_ROOT_DOMAIN}`,
-  logo: "/assets/branding/pchs-logo-placeholder.svg",
+  logo: "/assets/branding/pchs-logo.png",
 } as const;
 
 export type PortalStatus = "live" | "coming-soon";
@@ -107,11 +107,11 @@ export const unifiedPortalUrl = subdomain("app", "NEXT_PUBLIC_APP_URL");
 
 /**
  * Official social/contact channels. Left unset until the school confirms
- * the official handles — do not fill these with guessed URLs. Components
+ * the official handle — do not fill these with guessed URLs. Components
  * should render the icon in a disabled state when a value is null.
  */
 export const socialLinks = {
-  facebook: null as string | null,
+  facebook: "https://www.facebook.com/puracentralhigh/" as string | null,
   youtube: null as string | null,
   email: null as string | null,
   phone: null as string | null,

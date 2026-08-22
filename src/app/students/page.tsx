@@ -11,6 +11,10 @@ export default function StudentsPage() {
     <ComingSoon
       title="Student Services"
       description="Guidance, library, clubs, and other student services will be detailed here in an upcoming development session. In the meantime, the Student Portal is on the Go PCHS roadmap."
+      image={{
+        src: "/assets/images/students/students-learning.jpg",
+        alt: "PCHS students learning together",
+      }}
     />
   );
 }

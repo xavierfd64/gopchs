@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { news } from "@/data/news";
 import { Card } from "@/components/ui/Card";
 
@@ -28,10 +29,22 @@ export function NewsSection() {
       </div>
 
       <ul className="flex flex-1 flex-col divide-y divide-black/5">
-        {news.map((article) => (
+        {news.slice(0, 3).map((article) => (
           <li key={article.slug} className="flex gap-3 py-3 first:pt-0 last:pb-0">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-pchs-green-800/10 text-[10px] font-semibold uppercase text-pchs-green-700">
-              {article.category.split(" ")[0]}
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-pchs-green-800/10">
+              {article.coverImage ? (
+                <Image
+                  src={article.coverImage}
+                  alt={article.title}
+                  fill
+                  sizes="56px"
+                  className="object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase text-pchs-green-700">
+                  {article.category.split(" ")[0]}
+                </span>
+              )}
             </div>
             <div>
               <p className="text-sm font-semibold leading-snug text-pchs-ink">

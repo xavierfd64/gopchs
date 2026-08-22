@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Container } from "@/components/ui/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Badge } from "@/components/ui/Badge";
@@ -13,8 +14,22 @@ export const metadata: Metadata = {
 
 export default function FacultyStaffPage() {
   return (
-    <div className="py-14 sm:py-20">
-      <Container>
+    <div className="pb-14 sm:pb-20">
+      <div className="relative aspect-[21/9] w-full overflow-hidden">
+        <Image
+          src="/assets/images/faculty/faculty-placeholder.jpg"
+          alt="Illustrative placeholder photo of PCHS faculty and staff"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
+      </div>
+      <p className="bg-pchs-cream py-2 text-center text-xs text-black/50">
+        Illustrative placeholder photo — not an actual photograph of PCHS faculty.
+      </p>
+
+      <Container className="pt-10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <SectionHeading
             eyebrow="About PCHS"
