@@ -7,6 +7,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const BASE = process.argv[2] || 'http://127.0.0.1:8080';
 const SHOTS = process.argv[3] || './screens';
 const NEW_PW = 'Moto$hop2026';
+const ADMIN_USER = process.env.MOTO_ADMIN_USER || 'admin';
+const INITIAL_PW = process.env.MOTO_INITIAL_PW || 'Initial#Pass2026';
 const results = [];
 let failed = 0;
 
@@ -31,20 +33,20 @@ await step('Unauthenticated pages redirect to login', async () => {
   assert(page.url().includes('r=login'), page.url());
 });
 await step('Invalid login shows a generic error', async () => {
-  await page.fill('#username', 'admin');
+  await page.fill('#username', ADMIN_USER);
   await page.fill('#password', 'wrong-password');
   await page.click('button[type=submit]');
   assert(await page.isVisible('text=Invalid username or password.'));
 });
-await step('Login with temporary admin/admin forces a password change', async () => {
-  await page.fill('#username', 'admin');
-  await page.fill('#password', 'admin');
+await step('Login works and a flagged account is forced to change its password', async () => {
+  await page.fill('#username', ADMIN_USER);
+  await page.fill('#password', INITIAL_PW);
   await page.click('button[type=submit]');
   await page.waitForURL(/password\.change/);
   await page.screenshot({ path: `${SHOTS}/01-forced-password-change.png` });
   await page.goto(url('dashboard'));
   assert(page.url().includes('password.change'), 'dashboard blocked until password changed');
-  await page.fill('#current_password', 'admin');
+  await page.fill('#current_password', INITIAL_PW);
   await page.fill('#new_password', NEW_PW);
   await page.fill('#confirm_password', NEW_PW);
   await page.click('form[action*="password.change"] button[type=submit]');

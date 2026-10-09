@@ -11,8 +11,10 @@
       <table class="table">
         <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col">Details</th></tr></thead>
         <tbody>
-        <?php foreach ($checks as [$label, $ok, $detail]): ?>
-          <tr><td><?= e($label) ?></td><td><?= $ok ? '<span class="pill pill-success">OK</span>' : '<span class="pill pill-warning">Attention</span>' ?></td><td><?= e($detail) ?></td></tr>
+        <?php foreach ($checks as [$label, $status, $detail, $fix]): ?>
+          <tr><td><?= e($label) ?></td>
+            <td><?= $status === 'pass' ? '<span class="pill pill-success">Passed</span>' : ($status === 'warn' ? '<span class="pill pill-warning">Warning</span>' : '<span class="pill pill-danger">Failed</span>') ?></td>
+            <td><?= e($detail) ?><?php if ($fix !== ''): ?><small class="muted block"><?= e($fix) ?></small><?php endif; ?></td></tr>
         <?php endforeach; ?>
           <tr><td>Application version</td><td><span class="pill pill-muted"><?= e(MOTO_VERSION) ?></span></td><td>Database schema <?= e((string) MOTO_SCHEMA_VERSION) ?></td></tr>
         </tbody>

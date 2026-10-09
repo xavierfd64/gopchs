@@ -8,6 +8,7 @@ use App\Core\DB;
 use App\Core\Http;
 use App\Core\Settings;
 use App\Services\Migrator;
+use App\Services\Requirements;
 
 final class SettingsController extends Controller
 {
@@ -109,15 +110,16 @@ final class SettingsController extends Controller
     /** Environment diagnostics, available only to logged-in administrators. */
     public function system(): void
     {
-        $checks = self::environmentChecks();
+        Requirements::ensureDirectories();
+        $checks = Requirements::check(false);
         try {
             $dbVersion = (string) DB::value('SELECT VERSION()');
-            $checks[] = ['Database connection', true, 'Connected (server ' . $dbVersion . ')'];
+            $checks[] = ['Database connection', Requirements::PASS, 'Connected (server ' . $dbVersion . ')', ''];
         } catch (\Throwable) {
-            $checks[] = ['Database connection', false, 'Connection failed'];
+            $checks[] = ['Database connection', Requirements::FAIL, 'Connection failed', 'Check the database settings in the configuration file.'];
         }
         $_SESSION['_session_probe'] = ($_SESSION['_session_probe'] ?? 0) + 1;
-        $checks[] = ['PHP sessions', session_status() === PHP_SESSION_ACTIVE, 'Active (probe count ' . (int) $_SESSION['_session_probe'] . '; reload to confirm it increases)'];
+        $checks[] = ['Session persistence', Requirements::PASS, 'Probe count ' . (int) $_SESSION['_session_probe'] . ' (reload: it should increase)', ''];
         $this->view('pages/system', [
             'title' => 'System check',
             'nav' => 'settings',
@@ -131,27 +133,5 @@ final class SettingsController extends Controller
         $ran = (new Migrator(DB::pdo()))->migrate();
         Http::flash('success', $ran ? 'Applied database updates: ' . implode(', ', $ran) . '.' : 'The database is already up to date.');
         Http::redirect(url('settings.system'));
-    }
-
-    /** @return list<array{0:string,1:bool,2:string}> shared with the installer */
-    public static function environmentChecks(bool $installing = false): array
-    {
-        $ext = static fn (string $e) => extension_loaded($e);
-        $checks = [
-            ['PHP version ≥ ' . MOTO_MIN_PHP . ' (8.3 recommended)', version_compare(PHP_VERSION, MOTO_MIN_PHP, '>='), PHP_VERSION],
-            ['PDO extension', $ext('pdo'), $ext('pdo') ? 'Available' : 'Missing'],
-            ['PDO MySQL driver', $ext('pdo_mysql'), $ext('pdo_mysql') ? 'Available' : 'Missing'],
-            ['mbstring extension', $ext('mbstring'), $ext('mbstring') ? 'Available' : 'Missing'],
-            ['fileinfo extension (image uploads)', $ext('fileinfo'), $ext('fileinfo') ? 'Available' : 'Missing'],
-            ['JSON support', function_exists('json_encode'), 'Available'],
-            ['zlib (PDF compression, optional)', function_exists('gzcompress'), function_exists('gzcompress') ? 'Available' : 'Not available; PDFs will be uncompressed'],
-            ['HTTPS', \App\Core\Http::isHttps(), \App\Core\Http::isHttps() ? 'Active' : 'Not active: enable SSL before production use'],
-        ];
-        foreach (array_merge($installing ? ['config'] : [], ['storage', 'storage/logs', 'uploads/products']) as $dir) {
-            $path = MOTO_ROOT . '/' . $dir;
-            $ok = is_dir($path) && is_writable($path);
-            $checks[] = ["Writable: $dir/", $ok, $ok ? 'Writable' : 'Not writable'];
-        }
-        return $checks;
     }
 }

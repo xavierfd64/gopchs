@@ -70,3 +70,12 @@ Any failure rolls the whole transaction back. A repeated `client_token` returns 
 - **Private folders:** blocked by per-folder and root `.htaccess` rules. Files in them do nothing if executed directly.
 - **No background jobs:** login-attempt cleanup and session garbage collection happen opportunistically during requests.
 - **No email:** no reliance on `mail()`, shell commands, cron, Node or a persistent process.
+
+## Version 1.1.0: installer package
+- **No new features:** the application is unchanged apart from a stronger password rule and the requirement checker shared with Settings → System Check.
+- **Database:** no schema change, so no migration. The installer never drops tables or touches a database that already has a MotoSupply administrator. Other applications' tables are left untouched.
+- **New 7-step wizard** in `install/`: Welcome, Requirements (Passed/Warning/Failed with plain-language fixes), Database (with Test connection), Shop, Administrator, Install, Finished.
+- **Strong password required:** the old temporary `admin`/`admin` option was removed from the public installer.
+- **Config location:** stored outside the document root when the host allows it (`../motosupply-private/`), with only a relative pointer left in `config/config.php`. Otherwise it goes in the web-denied `config/` folder.
+- **Failure handling:** installs that fail after writing data are rolled back (admin, settings and config removed), so the wizard can be retried.
+- **Package:** `dist/MotoSupply-POS-Installer.zip`, built and checked by `tools/build-release.sh` and verified by `tests/verify_release.sh`.

@@ -22,6 +22,9 @@ final class ImageUpload
         if ($file === null || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
             return null;
         }
+        if (!class_exists(\finfo::class)) {
+            throw new ValidationException(['image' => 'Image uploads are not available on this server (PHP fileinfo extension missing).']);
+        }
         if (($file['error'] ?? -1) !== UPLOAD_ERR_OK || !is_uploaded_file((string) ($file['tmp_name'] ?? ''))) {
             throw new ValidationException(['image' => 'The image upload failed. Try a smaller file.']);
         }

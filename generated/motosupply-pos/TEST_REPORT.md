@@ -1,69 +1,83 @@
-# Test report — MotoSupply POS 1.0.0
+# Test report — MotoSupply POS 1.1.0 installer package
 
-Generated from runs on 2026-10-09 09:20 UTC. Every result below comes from tests that were actually run.
+**Package tested:** `dist/MotoSupply-POS-Installer.zip` (sha256 `54c019c9d727d06269ec1b68805eea8b604104a8c4cb6ede997e8acdabfd4fe6`).
+**Date:** 2026-10-09 09:35 UTC.
 
-## Environment
+Every result in this report comes from tests that were actually run. Each run started from a **clean extraction of the ZIP**, not from the development folder. Reproduce with `tests/verify_release.sh`.
+
+## Summary
+
+| Suite | Subfolder install (`/wiz`) | Root install (like `htdocs/`) |
+|---|---|---|
+| Installation wizard (browser) | 19 passed, 0 failed | 19 passed, 0 failed |
+| Application end-to-end (browser) | 21 passed, 0 failed | 21 passed, 0 failed |
+| HTTP security checks | 17 passed, 0 failed | 17 passed, 0 failed |
+| Service tests (PHP, database) | 37 passed, 0 failed | (same code) |
+
+**Live InfinityFree deployment was NOT verified.** No InfinityFree account was available to this build. Run `INSTALLATION-CHECKLIST.md` on your test site before relying on it.
+
+## Test environment
+
 | Item | Value |
 |---|---|
-| PHP | 8.3.6 (CLI and Apache mod_php) |
+| PHP | 8.3.6 (Apache mod_php and CLI) |
 | Database | 10.11.14-MariaDB-0ubuntu0.24.04.1 |
-| Web servers | PHP built-in server; Apache Apache/2.4.58 with `.htaccess` (AllowOverride All), mod_php, HTTP and HTTPS (self-signed) |
-| Install location | Web root (built-in server) and subfolders `/shop/` and `/zipinstall/` (Apache) |
-| Release artifact tested | `dist/motosupply-pos-1.0.0.zip`, extracted into Apache and installed through `/install/` |
-| Browser | Chromium (Playwright, headless), viewports 1440×900, 768×1024, 375×812 |
+| Web server | Apache/2.4.58, `.htaccess` enabled (AllowOverride All), mod_headers, mod_rewrite; HTTPS checked with a self-signed certificate |
+| Layout A | Subfolder `http://127.0.0.1:8090/wiz/`. The parent folder is not writable, so the config is saved in the protected `config/` folder. |
+| Layout B | Website root `http://127.0.0.1:8091/`, like InfinityFree `htdocs/`. The parent is writable, so the config is saved in `../motosupply-private/`, outside the document root. |
+| Browser | Chromium (Playwright, headless) at 1440×900, 1280×860, 768×1024 and 375×812 |
+| Node.js | Used **only** to run the browser tests on the development machine. Not needed on the host. |
 
-**Not tested:** InfinityFree itself (no account access). Run `DEPLOYMENT_CHECKLIST.md` on the live site.
+## 1. Package checks (`tests/verify_release.sh`)
+```
+== Package
+No errors detected in compressed data of /home/user/gopchs/generated/motosupply-pos/dist/MotoSupply-POS-Installer.zip.
+ZIP integrity OK
+files: 91
+php -l OK on 65 files (8.3.6)
+assets OK
+```
+- **Present:** `index.php`, `.htaccess`, the installer, the schema and migrations, `config.sample.php`, `README.md`, `INSTALLATION-CHECKLIST.md`, and every asset referenced by the templates.
+- **Absent (verified):** `config/config.php`, `storage/installed.lock`, `.env`, `.git`, `node_modules`, `tests/` and `*.log`.
+- The build script refuses to package a real config file or the local test credentials.
+- **Dependencies:** no third-party PHP or JS libraries. No build step: the CSS and JS are hand-written production files, and the interface uses system fonts and inline SVG icons.
 
-## 1. Service tests — `php tests/run.php` → **37 passed, 0 failed**
-Covers money and time, authentication, products, stock adjustments, POS sales, voids, reports, CSV/PDF exports and concurrency. The concurrency tests run 8 parallel PHP processes competing for 3 units, plus 6 parallel duplicate submissions.
+## 2. Installation wizard — layout A (subfolder)
+| Result | Test |
+|---|---|
+| PASS | Opening the website starts the wizard (Welcome step) |
+| PASS | Later steps cannot be skipped |
+| PASS | Requirements step shows Passed/Warning/Failed statuses |
+| PASS | Wrong database password gives a plain-language error and is not echoed |
+| PASS | Unknown database host and unknown database name are explained |
+| PASS | Database with conflicting tables from another application is refused |
+| PASS | Test connection succeeds with correct details |
+| PASS | Shop step validates and defaults to Asia/Manila and PHP |
+| PASS | Administrator step rejects admin/admin, weak and mismatched passwords |
+| PASS | Install summary shows no secrets |
+| PASS | A failed install (config folder not writable) rolls back and can be retried |
+| PASS | Success page: login URL, lock confirmation, password reminder, no secrets |
+| PASS | Database state after install: one hashed admin, schema version, shop settings |
+| PASS | Go to Login works and the first login succeeds |
+| PASS | Installer is locked afterwards (GET and forged POSTs) |
+| PASS | Even with the lock and config removed, an installed database is never overwritten |
+| PASS | Installer internals and config are not web-accessible |
+| PASS | Wizard pages fit phone and tablet widths without horizontal scrolling |
+| PASS | No console errors during the wizard |
 
-| Result | Test | Details |
-|---|---|---|
-| PASS | Money::parse accepts valid amounts and rejects bad ones |  |
-| PASS | Money formatting uses peso sign and grouping |  |
-| PASS | Percent discount rounds half-up to the centavo |  |
-| PASS | Local date range converts Asia/Manila to UTC |  |
-| PASS | Valid login succeeds and invalid login fails |  |
-| PASS | Password is stored only as a bcrypt/argon hash |  |
-| PASS | Login is throttled after repeated failures |  |
-| PASS | Weak new passwords are rejected |  |
-| PASS | Password change clears the forced-change flag |  |
-| PASS | Product creation records opening stock movement |  |
-| PASS | Duplicate SKU is rejected |  |
-| PASS | Duplicate barcode is rejected; empty barcodes are allowed many times |  |
-| PASS | Invalid prices and quantities are rejected |  |
-| PASS | Editing a product does not change its stock |  |
-| PASS | Search finds products by name, SKU, barcode and category |  |
-| PASS | Adjustment records before/change/after, reason and user |  |
-| PASS | Adjustment cannot make stock negative and requires a reason |  |
-| PASS | Successful sale: server prices, totals, change, stock and movements |  |
-| PASS | Client-supplied prices and totals are ignored |  |
-| PASS | Percent discount is calculated on the server |  |
-| PASS | Insufficient payment is rejected and nothing is saved |  |
-| PASS | Insufficient stock is rejected |  |
-| PASS | Discount larger than subtotal and invalid carts are rejected |  |
-| PASS | Archived products cannot be sold |  |
-| PASS | Repeated request with the same token does not create a duplicate sale |  |
-| PASS | Failed transaction rolls back completely |  |
-| PASS | Editing a product later keeps historical sale details |  |
-| PASS | Void restores stock atomically, keeps the record and cannot repeat |  |
-| PASS | Report totals match database records |  |
-| PASS | Date filters exclude sales outside the range |  |
-| PASS | Every report type builds for daily, weekly and monthly ranges |  |
-| PASS | Inventory valuation uses cost prices |  |
-| PASS | CSV export escapes fields and neutralizes formula injection |  |
-| PASS | PDF export is a structurally valid PDF |  |
-| PASS | Large PDF paginates |  |
-| PASS | Concurrent sales cannot oversell the last units |  |
-| PASS | Concurrent duplicate submissions create one sale |  |
+Layout B (root) ran the same 19 checks: **19 passed, 0 failed**. It also confirmed the config was written outside the document root: `config/config.php` holds only a relative pointer to `../motosupply-private/config-<hash>.php`, and that folder is not reachable over HTTP.
 
-## 2. Browser end-to-end tests — `node tests/e2e.mjs` against the ZIP install on Apache → **21 passed, 0 failed**
+**Also tested by hand on a broken upload** (`assets/js/pos.js` and `uploads/.htaccess` deleted):
+- Both were reported as **Failed**, each with a plain-language fix.
+- The Continue button was hidden.
+- A forced POST stayed on the Requirements step, and opening the Database step redirected back to Requirements.
 
+## 3. Application end-to-end after installation — layout A (subfolder)
 | Result | Test |
 |---|---|
 | PASS | Unauthenticated pages redirect to login |
 | PASS | Invalid login shows a generic error |
-| PASS | Login with temporary admin/admin forces a password change |
+| PASS | Login works and a flagged account is forced to change its password |
 | PASS | Dashboard shows empty states with no data |
 | PASS | Create products through the form |
 | PASS | Duplicate SKU shows a field error |
@@ -83,11 +97,10 @@ Covers money and time, authentication, products, stock adjustments, POS sales, v
 | PASS | Logout destroys the session |
 | PASS | No JavaScript or CSP errors in the console |
 
-The same suite also passed (21/21) on the PHP built-in server in the web root, and on Apache in `/shop/`.
+Layout B (root): **21 passed, 0 failed**.
 
-## 3. HTTP security checks — `tests/http_security.sh` against the ZIP install → **17 passed, 0 failed**
-
-| Result | Check |
+## 4. HTTP security checks — layout A (subfolder)
+| Result | Test |
 |---|---|
 | PASS | API search without login returns 401 |
 | PASS | Checkout without login returns 401 |
@@ -107,33 +120,61 @@ The same suite also passed (21/21) on the PHP built-in server in the web root, a
 | PASS | Session fixation: unknown session ID is not accepted as logged in |
 | PASS | 6th failed login is throttled (429) |
 
-## 4. Apache access rules (manual curl probes on Apache, `/shop/` and `/zipinstall/`)
+Layout B (root): **17 passed, 0 failed**.
 
-| Path | Result |
+## 5. Service tests (business logic against MariaDB)
+| Result | Test |
 |---|---|
-| `config/config.php`, `config/config.sample.php`, `config/` | 403 |
-| `app/bootstrap.php`, `app/Core/DB.php`, `app/views/layout/app.php` | 403 |
-| `database/migrations/001_initial_schema.sql` | 403 |
-| `storage/installed.lock`, `storage/logs/`, `storage/sessions/` | 403 |
-| `.htaccess`, `uploads/.htaccess`, `README.md` | 403 |
-| A `.php` file placed in `uploads/products/` | 403 (not executed) |
-| An image in `uploads/products/` | 200 |
-| `assets/…` (CSS, JS, SVG) | 200 |
-| `/install/` after installation | 403 "Already installed" |
-| Session cookie over HTTPS | `path=/shop/; secure; HttpOnly; SameSite=Lax` |
-| Session cookie over HTTP | `path=/shop/; HttpOnly; SameSite=Lax` |
+| PASS | Money::parse accepts valid amounts and rejects bad ones |
+| PASS | Money formatting uses peso sign and grouping |
+| PASS | Percent discount rounds half-up to the centavo |
+| PASS | Local date range converts Asia/Manila to UTC |
+| PASS | Valid login succeeds and invalid login fails |
+| PASS | Password is stored only as a bcrypt/argon hash |
+| PASS | Login is throttled after repeated failures |
+| PASS | Weak new passwords are rejected |
+| PASS | Password change clears the forced-change flag |
+| PASS | Product creation records opening stock movement |
+| PASS | Duplicate SKU is rejected |
+| PASS | Duplicate barcode is rejected; empty barcodes are allowed many times |
+| PASS | Invalid prices and quantities are rejected |
+| PASS | Editing a product does not change its stock |
+| PASS | Search finds products by name, SKU, barcode and category |
+| PASS | Adjustment records before/change/after, reason and user |
+| PASS | Adjustment cannot make stock negative and requires a reason |
+| PASS | Successful sale: server prices, totals, change, stock and movements |
+| PASS | Client-supplied prices and totals are ignored |
+| PASS | Percent discount is calculated on the server |
+| PASS | Insufficient payment is rejected and nothing is saved |
+| PASS | Insufficient stock is rejected |
+| PASS | Discount larger than subtotal and invalid carts are rejected |
+| PASS | Archived products cannot be sold |
+| PASS | Repeated request with the same token does not create a duplicate sale |
+| PASS | Failed transaction rolls back completely |
+| PASS | Editing a product later keeps historical sale details |
+| PASS | Void restores stock atomically, keeps the record and cannot repeat |
+| PASS | Report totals match database records |
+| PASS | Date filters exclude sales outside the range |
+| PASS | Every report type builds for daily, weekly and monthly ranges |
+| PASS | Inventory valuation uses cost prices |
+| PASS | CSV export escapes fields and neutralizes formula injection |
+| PASS | PDF export is a structurally valid PDF |
+| PASS | Large PDF paginates |
+| PASS | Concurrent sales cannot oversell the last units |
+| PASS | Concurrent duplicate submissions create one sale |
 
-## 5. PHP compatibility
-- `php -l` passes on every PHP file under PHP 8.3.6.
-- All suites ran with `error_reporting(E_ALL)`, and warnings and deprecations were converted into exceptions. None occurred, and the Apache error log shows no PHP warnings, notices or deprecations.
-- No PHP 8.4-only functions are used. Only core extensions are needed: PDO, pdo_mysql, mbstring, fileinfo, json, and optionally zlib.
+## 6. Compatibility
+- **PHP 8.3.6:** `php -l` passes on all 65 PHP files in the package. No PHP 8.4-only functions are used, and nothing is deprecated in 8.3.
+- **Errors:** all suites ran with `error_reporting(E_ALL)`, and the app turns warnings and deprecations into exceptions. None occurred, and the Apache error log has no PHP warnings, notices or deprecations.
+- **Extensions:** only standard ones (`pdo`, `pdo_mysql`, `mbstring`, `json`; optional `fileinfo` and `zlib`).
+- **Server requirements:** no shell commands, cron jobs, background workers, Composer, npm or Node.js on the server.
 
-## 6. Defects found and fixed during testing
-| Defect | Fix |
-|---|---|
-| Stock-movement report crashed with division by zero when exporting all rows | Treat a page size of 0 as "all rows" |
-| CSRF failures used HTTP 419, which Apache turns into 500 | Use 403 |
-| Login lockout counted the IP address, so 5 failed logins from a shop locked out every user there | 5 failures per username, 20 per IP |
-| Inventory table caused page-wide horizontal scrolling on phones (screen-reader label positioned against the page) | Made the table container `position: relative` |
-| The cart's empty-state message stayed visible next to cart items; the header search icon overlapped the placeholder | Global `[hidden]` rule; more specific input selectors |
-| Session regeneration raised a warning outside a web request | Regenerate only when a session is active |
+## 7. Remaining limitations
+- **Not verified on InfinityFree.** Things to confirm there:
+  - That InfinityFree's PHP may write next to `htdocs/`. If not, the installer automatically keeps the config in the protected `config/` folder instead.
+  - That the `.htaccess` directives used are accepted.
+  - That InfinityFree's browser "security check" does not interfere. It should not, for normal browsers.
+- The HTTPS behaviour (`Secure` cookie, automatic `force_https` when installed over HTTPS) was checked on Apache with a self-signed certificate, not with a real certificate.
+- Real USB barcode scanners were simulated: fast typing followed by Enter, which is how keyboard-mode scanners behave. No physical scanner was used.
+- Printing was checked as the browser receipt page only. No physical printer was used.
+- Feature limits (cash only, one administrator, whole-sale voids) are listed in `README.md` under "Known limitations".

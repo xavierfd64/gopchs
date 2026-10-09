@@ -109,17 +109,37 @@ final class Auth
     /** Returns an error message or null on success. */
     public static function validateNewPassword(string $new, string $confirm, string $username): ?string
     {
-        if (mb_strlen($new) < self::MIN_PASSWORD_LENGTH) {
-            return 'The new password must be at least ' . self::MIN_PASSWORD_LENGTH . ' characters long.';
+        return self::passwordStrengthError($new, $username)
+            ?? (hash_equals($new, $confirm) ? null : 'The password and confirmation do not match.');
+    }
+
+    /**
+     * Strong-password rule used by the installer and password changes: at least
+     * MIN_PASSWORD_LENGTH characters, at least three of lower/upper/digit/symbol,
+     * not based on the username and not a common password.
+     */
+    public static function passwordStrengthError(string $pw, string $username): ?string
+    {
+        if (mb_strlen($pw) < self::MIN_PASSWORD_LENGTH) {
+            return 'The password must be at least ' . self::MIN_PASSWORD_LENGTH . ' characters long.';
         }
-        if (strlen($new) > 72) {
-            return 'The new password must be at most 72 bytes long.';
+        if (strlen($pw) > 72) {
+            return 'The password must be at most 72 bytes long.';
         }
-        if (!hash_equals($new, $confirm)) {
-            return 'The new password and confirmation do not match.';
+        $classes = (int) preg_match('/[a-z]/', $pw) + (int) preg_match('/[A-Z]/', $pw)
+            + (int) preg_match('/\d/', $pw) + (int) preg_match('/[^a-zA-Z\d]/', $pw);
+        if ($classes < 3) {
+            return 'Use at least three of these: lowercase letters, uppercase letters, numbers, symbols.';
         }
-        if (strcasecmp($new, 'admin') === 0 || strcasecmp($new, $username) === 0 || strcasecmp($new, 'password') === 0) {
-            return 'Choose a password that is not easy to guess.';
+        $lower = strtolower($pw);
+        $common = ['password', 'admin', 'motosupply', 'qwerty', '12345678', '123456789', 'letmein', 'welcome', 'iloveyou'];
+        foreach ($common as $word) {
+            if (str_contains($lower, $word) && strlen($lower) < strlen($word) + 6) {
+                return 'This password is too easy to guess. Choose something less common.';
+            }
+        }
+        if ($username !== '' && str_contains($lower, strtolower($username))) {
+            return 'The password must not contain the username.';
         }
         return null;
     }

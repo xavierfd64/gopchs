@@ -13,7 +13,7 @@
     <div class="field">
       <label for="new_password">New password</label>
       <input id="new_password" name="new_password" type="password" autocomplete="new-password" required minlength="8" maxlength="72" aria-describedby="pw-hint">
-      <small id="pw-hint" class="hint">At least 8 characters. Avoid “admin”, your username and other easy guesses.</small>
+      <small id="pw-hint" class="hint">At least 8 characters using three of: lowercase, uppercase, numbers, symbols. Must not contain your username or a common word.</small>
     </div>
     <div class="field">
       <label for="confirm_password">Confirm new password</label>
