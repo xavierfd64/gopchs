@@ -6,14 +6,15 @@ declare(strict_types=1);
  * role-based access on every route, CSRF, the void approval flow, user management rules,
  * branding uploads, theme persistence, the scheduled-task URL, and the updater upload page.
  *
- *   php tests/http_v13.php <base-url> <database> <admin-user> <admin-password> [<https-base-url>]
+ *   php tests/http_v13.php <base-url> <database> <admin-user> <admin-password> [<https-base-url>|''] [<webroot>]
  *
  * The database name is used to set up test users' passwords directly (skipping the forced
  * first-login change, which tests/e2e.mjs covers in the browser).
  */
 
 [$_, $B, $DBNAME, $AU, $AP] = $argv + [null, null, null, null, null];
-$HTTPS = $argv[5] ?? null;
+$HTTPS = ($argv[5] ?? '') !== '' ? $argv[5] : null;
+$ROOT = $argv[6] ?? '/var/www/mototest'; // web root on disk, for the "PHP never runs in uploads/" probe
 if (!$AP) {
     exit("usage: php tests/http_v13.php <base-url> <database> <admin-user> <admin-password> [<https-base-url>]\n");
 }
@@ -327,7 +328,7 @@ test('Logo upload: valid PNG is stored under a random name and shown on login an
     eq(200, curl_getinfo($img, CURLINFO_RESPONSE_CODE));
     eq('image/png', curl_getinfo($img, CURLINFO_CONTENT_TYPE));
 });
-test('Branding rejects PHP disguised as an image, SVG, oversize files; uploads dir never runs PHP', function () use ($admin, $B) {
+test('Branding rejects PHP disguised as an image, SVG, oversize files; uploads dir never runs PHP', function () use ($admin, $B, $ROOT) {
     $before = sql("SELECT setting_value FROM settings WHERE setting_key = 'logo_path'");
     $evil = tempnam(sys_get_temp_dir(), 'evil');
     file_put_contents($evil, "\x89PNG\r\n\x1a\n<?php echo 'PWNED'; ?>");
@@ -339,20 +340,20 @@ test('Branding rejects PHP disguised as an image, SVG, oversize files; uploads d
     file_put_contents($big, str_repeat('A', 1100000));
     $admin->post('settings.branding', ['kind' => 'logo', 'logo' => new CURLFile($big, 'image/png', 'big.png')]);
     eq($before, sql("SELECT setting_value FROM settings WHERE setting_key = 'logo_path'"), 'logo unchanged');
-    $files = glob('/var/www/mototest/uploads/branding/*') ?: [];
+    $files = glob($ROOT . '/uploads/branding/*') ?: [];
     foreach ($files as $f) {
         ok((bool) preg_match('/\.(png|jpe?g|webp|ico|html)$/', $f), "unexpected file $f");
     }
     // Even if a PHP file got into uploads/, the web server must not execute it.
-    file_put_contents('/var/www/mototest/uploads/branding/probe.php', '<?php echo "EXEC" . "UTED";');
+    file_put_contents($ROOT . '/uploads/branding/probe.php', '<?php echo "EXEC" . "UTED";');
     $ch = curl_init("$B/uploads/branding/probe.php");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     $body = (string) curl_exec($ch);
     ok(!str_contains($body, 'EXECUTED'), 'PHP in uploads must not run');
     eq(403, curl_getinfo($ch, CURLINFO_RESPONSE_CODE));
-    unlink('/var/www/mototest/uploads/branding/probe.php');
+    unlink($ROOT . '/uploads/branding/probe.php');
 });
-test('Favicon upload (PNG) replaces the default favicon; removal restores it', function () use ($admin, $png, $B) {
+test('Favicon upload (PNG) replaces the default favicon; removal restores it', function () use ($admin, $png, $B, $ROOT) {
     $admin->get('settings.appearance');
     $admin->post('settings.branding', ['kind' => 'favicon', 'favicon' => new CURLFile($png(64, 64), 'image/png', 'fav.png')]);
     $path = sql("SELECT setting_value FROM settings WHERE setting_key = 'favicon_path'");
@@ -361,7 +362,7 @@ test('Favicon upload (PNG) replaces the default favicon; removal restores it', f
     $admin->get('settings.appearance');
     $admin->post('settings.branding', ['kind' => 'favicon', 'remove' => '1']);
     eq('', sql("SELECT setting_value FROM settings WHERE setting_key = 'favicon_path'"));
-    ok(!is_file('/var/www/mototest/' . $path), 'old file deleted');
+    ok(!is_file($ROOT . '/' . $path), 'old file deleted');
 });
 test('Theme colours persist, are served as CSS variables, and unsafe values are refused', function () use ($admin, $B) {
     $admin->get('settings.appearance');

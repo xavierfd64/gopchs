@@ -462,13 +462,19 @@ test('Secrets are encrypted at rest and decrypt only with the same key', functio
 
 echo "\nP11 — end-of-day email\n";
 $sink = null;
-$sinkDir = sys_get_temp_dir() . '/moto-smtp-' . bin2hex(random_bytes(4));
-mkdir($sinkDir);
-$smtpPort = 2525 + random_int(0, 400);
-exec('openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1" -keyout '
-    . escapeshellarg("$sinkDir/key.pem") . ' -out ' . escapeshellarg("$sinkDir/cert.pem") . ' 2>/dev/null');
-$sink = proc_open(['python3', __DIR__ . '/smtp_sink.py', (string) $smtpPort, "$sinkDir/mail", "$sinkDir/cert.pem", "$sinkDir/key.pem"], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $sinkPipes);
-fgets($sinkPipes[1]); // "ready"
+// MOTO_TEST_SMTP_SINK="port:/dir" uses a sink that is already running (dir holds cert.pem and mail/),
+// e.g. started on the host for a container without Python. Otherwise one is started here.
+if (preg_match('/^(\d+):(.+)$/', (string) getenv('MOTO_TEST_SMTP_SINK'), $ext)) {
+    [$smtpPort, $sinkDir] = [(int) $ext[1], $ext[2]];
+} else {
+    $sinkDir = sys_get_temp_dir() . '/moto-smtp-' . bin2hex(random_bytes(4));
+    mkdir($sinkDir);
+    $smtpPort = 2525 + random_int(0, 400);
+    exec('openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1" -keyout '
+        . escapeshellarg("$sinkDir/key.pem") . ' -out ' . escapeshellarg("$sinkDir/cert.pem") . ' 2>/dev/null');
+    $sink = proc_open(['python3', __DIR__ . '/smtp_sink.py', (string) $smtpPort, "$sinkDir/mail", "$sinkDir/cert.pem", "$sinkDir/key.pem"], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $sinkPipes);
+    fgets($sinkPipes[1]); // "ready"
+}
 Mailer::$testStreamOptions = ['cafile' => "$sinkDir/cert.pem"];
 Settings::set([
     'mail_transport' => 'smtp', 'smtp_host' => '127.0.0.1', 'smtp_port' => (string) $smtpPort, 'smtp_encryption' => 'tls',
@@ -557,9 +563,11 @@ test('A manual "Send now" may retry a failed date and then sends it once', funct
     eq('already-sent', EmailReports::runScheduled('manual', $date));
     eq($n + 1, count($mails()));
 });
-proc_terminate($sink);
-proc_close($sink);
-exec('rm -rf ' . escapeshellarg($sinkDir));
+if ($sink !== null) {
+    proc_terminate($sink);
+    proc_close($sink);
+    exec('rm -rf ' . escapeshellarg($sinkDir));
+}
 
 echo "\n$passed passed, $failed failed\n";
 if ($out = getenv('MOTO_TEST_REPORT')) {

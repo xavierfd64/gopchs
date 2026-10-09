@@ -27,6 +27,7 @@ Tick each item on your live site. If something fails, write down the exact messa
 - [ ] `https://yoursite/install/lib/Installer.php`
 - [ ] `https://yoursite/database/migrations/001_initial_schema.sql`
 - [ ] `https://yoursite/README.md`
+- [ ] `https://yoursite/storage/backups/` (after the first update or migration)
 - [ ] Free SSL certificate installed; site opens with `https://` (padlock)
 - [ ] **Settings → System Check → Require HTTPS (production)** turned on; `http://` now redirects to `https://`
 - [ ] Yellow "Not secure" bar no longer appears
@@ -44,9 +45,26 @@ Tick each item on your live site. If something fails, write down the exact messa
 - [ ] **Sales History:** the sale is listed and opens; a void (test sale) returns the stock
 - [ ] **Dashboard:** shows today's sales
 - [ ] **Reports:** Daily Sales shows the sale; **Export CSV** and **Download PDF** both open
-- [ ] Pages look right on a phone or tablet
+- [ ] Pages look right on a phone and a tablet (portrait and landscape). On the POS, total and Pay stay visible
+- [ ] **POS:** tap a quantity, use the number pad, try more than the stock (refused), then Confirm
+- [ ] **My Account:** void approval PIN set. **Sales History:** void a test sale with your username and PIN; a wrong PIN is refused
+- [ ] **Users:** create a Cashier account. Signed in as the cashier, Settings, Users and Reports are not available
+- [ ] **Inventory → Integrity check:** "Issues found" is 0, and the negative-stock guard is **On**
+- [ ] **Inventory → Import CSV:** download the template, import 1 test product, check the summary
+- [ ] **Settings → Receipt & printing:** paper size chosen; **Test print** works on the shop printer
+- [ ] **Settings → Appearance:** logo uploaded (optional); it shows on the sign-in page and receipt
+- [ ] **Settings → Email reports** (optional): **Send test email** arrives. A scheduler is set up: cron job, external HTTPS scheduler, or on-visit
+- [ ] **Settings → Audit log:** your sign-ins and the test void are listed
+- [ ] **Settings → System Check:** zip and sodium rows are OK (needed for in-app updates); Database tables row says InnoDB
 
-## 5. Before real use
+## 5. Updating an existing site (1.0–1.2 → 1.3)
+- [ ] Database exported with phpMyAdmin, and `uploads/` and `config/` downloaded
+- [ ] Contents of `MotoSupply-POS-Update.zip` uploaded over the site (see `UPDATE-README.md`)
+- [ ] First visit works; `storage/backups/` contains a `before-migration` file
+- [ ] Sign-in works with the old password; products, sales and settings are all there
+- [ ] Void PIN set; Integrity check reviewed; staff accounts created
+
+## 6. Before real use
 - [ ] Running in **production mode** over HTTPS (never enter real passwords over `http://`)
 - [ ] Test products and sales removed (or reinstall into a fresh database; see README "Reinstalling")
 - [ ] First database backup exported from phpMyAdmin and kept off the server

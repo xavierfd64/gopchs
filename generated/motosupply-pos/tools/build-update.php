@@ -104,6 +104,10 @@ foreach (['UPDATE-README.md', 'CHANGELOG.md'] as $doc) {
 foreach ($files as $rel => $data) {
     $zip->addFromString($rel, $data);
 }
+// Normal file permissions when extracted by hand (0644), never world-writable.
+for ($i = 0; $i < $zip->numFiles; $i++) {
+    $zip->setExternalAttributesIndex($i, ZipArchive::OPSYS_UNIX, 0100644 << 16);
+}
 $zip->close();
 file_put_contents("$out.sha256", hash_file('sha256', $out) . "\n");
 printf("Built %s: version %s, %d files, signed by %s\n", $out, $version, count($files),

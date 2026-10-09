@@ -11,7 +11,12 @@ You never need to edit files, import SQL, or use Composer, npm, Node.js or a ter
 
 - **Package:** `MotoSupply-POS-Installer.zip`
 - **Needs:** PHP 8.1 or newer (tested on 8.3 and 8.4), MySQL or MariaDB, Apache hosting with `.htaccess` (InfinityFree and cPanel hosts have this). A free SSL certificate (HTTPS) is needed for real use.
-- **Includes:** Dashboard, POS with barcode-scanner support, Products / Inventory, Sales History, Reports (PDF and CSV), Settings
+- **Includes:**
+  - Dashboard, POS with barcode-scanner support and a touch quantity keypad, Products / Inventory, CSV product import.
+  - Sales History with supervisor-approved voids, Reports (PDF and CSV), end-of-day email reports.
+  - Users with roles and per-user permissions, an audit log.
+  - Receipt printing settings, logo and theme colours, and an in-app updater for signed update packages.
+- **Version:** 1.3.0. See `CHANGELOG.md`. Updating from 1.0–1.2: see [Updating](#updating-to-a-new-version).
 
 > The names below (`sql123.infinityfree.com`, `if0_12345678`, …) are **examples**. Always use the values from your own hosting control panel.
 
@@ -99,21 +104,61 @@ The installer is now **locked**. It cannot run again, and it can never reset you
 
 ## Using MotoSupply (quick tour)
 
-- **Settings:** check your shop details, receipt footer and low-stock level first.
+- **Settings:** check your shop details, receipt footer and low-stock level first. Settings has tabs: Store, Receipt printing, Email reports, Appearance, System Check (each needs its own permission).
+- **Users (administrators):**
+  - **Users → Add user**: choose a role (Administrator, Cashier, Inventory Staff, Reports Viewer or Custom) and a temporary password. The user must change it at first sign-in.
+  - Optionally allow or deny single permissions for one user. Everything not allowed is denied, and the server checks every request.
+  - You cannot change your own role or permissions, and the last active administrator cannot be deactivated or demoted.
+  - **Reset password** shows a one-time temporary password. **Deactivate** signs the user out at once and keeps their sales history.
+- **My Account:** change your password, and (if you may approve voids) set your **void approval PIN**: 6–12 digits, different from your password, stored only as a hash.
 - **Inventory → Add Product:**
   - Enter name, SKU, an optional barcode (click the field and scan the item), category, prices and opening stock.
   - Use **⋯ → Adjust stock** for deliveries and corrections. A reason is required, and every change is logged.
+  - **Import CSV:** download the template (one version has an example row that is never imported, the other has headers only), fill it in Excel, choose **Save As → CSV UTF-8**, upload it.
+    - The preview shows every row's action and problems. For existing SKUs you choose **skip** or **update details and prices**, and the preview lists every change (old → new).
+    - Stock of existing products is never changed by an import. Use Adjust stock for that.
+    - All rows are imported in one step. If anything fails, nothing is imported.
+  - **Integrity check:** compares stock with its history and sales. It never changes anything by itself. Fix issues with a physical count (recorded as an adjustment) or an approved void.
 - **POS:**
   - Type a product name or SKU, or scan a barcode. USB scanners add items automatically.
+  - Tap the quantity to open the **number pad**: 0–9, backspace and Clear, then Confirm. It shows the available stock and refuses more than that. A physical keyboard works too: digits, Backspace, Enter, Esc.
   - Press **F8** or **PAY NOW**, enter the cash received, and **Complete sale**.
-  - Print the receipt from the browser.
-  - Shortcuts: **F2** search, **F4** discount, **F8** pay.
+  - A sale is all-or-nothing: if any item no longer has enough stock (for example another till sold it), the whole sale is refused and nothing is deducted.
+  - On phones and portrait tablets the cart is a bar at the bottom: tap it to open the cart.
+  - Shortcuts: **F2** search, **F4** discount (if you have the discount permission), **F8** pay.
+- **Receipts (Settings → Receipt printing):**
+  - Paper 58 mm, 80 mm or A4, logo on/off, a **Test print**, and **Print automatically after each sale**.
+  - Automatic printing opens the browser's print dialog by itself. Browsers do not let websites print silently or detect printers, so the cashier confirms the print, or uses a kiosk-mode browser set up for silent printing.
+  - A printing problem never blocks or undoes a sale. **Print receipt** always works.
 - **Sales History:**
   - Find any sale and reprint its receipt.
-  - **Void** a sale with a reason and your password. The sale is kept, marked "Voided", and its stock is returned.
+  - **Void** needs the "Request voids" permission, a reason, and a supervisor's username and **void PIN** (not a login password). The sale is kept, marked "Voided" with who requested and who approved it, and its stock is returned. A sale can be voided only once.
+  - 5 wrong PINs for one approver, or 15 from one network, lock void approval for 15 minutes.
 - **Reports:**
   - Daily, weekly, monthly or custom sales; transactions; sales by product; inventory valuation; low stock; out of stock; stock movements.
   - Each report has **Export CSV** and **Download PDF**.
+- **Appearance (Settings → Appearance):**
+  - Primary and sidebar colours with a live preview. Colours with poor contrast are refused. **Reset to default** restores the original look.
+  - Upload a **logo** (PNG, JPG or WEBP, up to 1 MB) and a **browser icon** (PNG or ICO, up to 256 KB). They are shown on the sidebar, sign-in page, receipts and browser tab.
+  - Updates never replace your logo or colours.
+- **Sidebar:** the arrow button collapses it to icons (desktop). The choice is remembered on that device. On tablets and phones it opens with the ☰ button.
+- **Audit log (Settings):** sign-ins, failed sign-ins, user and permission changes, voids (approved and refused), stock corrections, imports, settings changes and updates. It records who, what, when, the record, the reason and the result, and never passwords or PINs. Entries cannot be edited or deleted in the app.
+
+## End-of-day email reports
+
+**Settings → Email reports:**
+1. Enter recipients (comma-separated), the delivery time and timezone, the sections, and whether to attach PDF and CSV files.
+2. Enter your SMTP server. For example, for Gmail: `smtp.gmail.com`, port 587, TLS, and an *app password*. Many free hosts block outgoing mail ports; if the test fails with "could not connect", use your email provider's SMTP or another host. The SMTP password is stored encrypted and is never shown again.
+3. Click **Send test email**.
+
+**What the report contains:** one complete day (00:00–23:59 in the report timezone). Net sales = gross − discounts. Voided sales are excluded and counted separately. Low- and out-of-stock lists show stock at the moment the email is generated. Each date is sent **once**: repeated triggers never send duplicates. Failures are recorded on the page and retried up to 3 times automatically; **Send report for this day** retries by hand.
+
+**How it is triggered** (choose one; PHP cannot run on a timer by itself):
+- **cPanel cron job (best):** Cron Jobs → every 15 minutes → the command shown on the page (`php …/app/cli/daily-report.php`).
+- **External scheduler (InfinityFree and hosts without cron):** click **New scheduler secret** and copy the HTTPS address shown once. Then add it to a free service such as cron-job.org, every 15 minutes.
+  - The address works only over HTTPS and with the secret. Only a fingerprint of the secret is stored.
+  - Treat the address like a password. Create a new secret if it leaks.
+- **On visit (fallback):** sends the report when someone uses MotoSupply after the delivery time. Timing depends on visits, and on some hosts that page loads a few seconds slower once a day.
 
 ---
 
@@ -139,7 +184,7 @@ The installer is now **locked**. It cannot run again, and it can never reset you
 The wizard stores the database settings **outside your public website folder** when the host allows it: `motosupply-private/config-XXXX.php`, next to `htdocs`/`public_html`. In that case `config/config.php` is only a small pointer. If the host does not allow it, the settings are saved in `config/config.php`, which is protected from web access. The Finished page tells you which one was used.
 
 ### Forgot the administrator password?
-There is deliberately no public "reset password" page.
+Another administrator can use **Users → Reset password**. Otherwise (there is deliberately no public "reset password" page):
 1. In **phpMyAdmin**, open the `users` table.
 2. Set the user's `must_change_password` to `1`, and `password_hash` to a new hash. You can create one on any PHP setup with `password_hash('NewTemp#Pass1', PASSWORD_DEFAULT)`.
 3. Log in with the temporary password. You will be asked to choose a new one.
@@ -162,7 +207,7 @@ The wizard will never write over a database that already has a MotoSupply admini
 Back up regularly, and always before an update.
 1. **Database:** phpMyAdmin → select the database → **Export** → *Quick*, *SQL* → **Go**. Keep the `.sql` file on your computer or cloud storage, **not** in the website folder.
 2. **Files:** in the File Manager, download:
-   - `uploads/products/` (product images)
+   - `uploads/products/` (product images) and `uploads/branding/` (logo and browser icon)
    - `config/config.php`, and `motosupply-private/` if it exists. These contain the database password, so keep them private.
 
 **To restore:**
@@ -172,10 +217,41 @@ Back up regularly, and always before an update.
 4. Create `storage/installed.lock` (an empty file is fine) so the installer stays locked.
 
 ## Updating to a new version
-1. **Back up** the database and files.
-2. Unzip the new `MotoSupply-POS-Installer.zip` on your computer.
-3. Upload everything **except** `install/`, `config/`, `storage/` and `uploads/`, replacing the old files.
-4. Log in → **Settings → System Check**. If it lists pending database updates, click **Apply database updates**. Updates only add or change structure; they never delete your sales or products.
+
+Updates come as **`MotoSupply-POS-Update.zip`**. It contains only application code, plus a signed list of files and checksums. It never contains `install/`, your configuration, `storage/`, `uploads/`, or any password. Updates never reset your administrator account, and never delete products, sales or settings.
+
+### From 1.3 or newer: in the app
+1. **Settings → Updates** (administrators, or users with the "Manage application updates" permission).
+2. Upload `MotoSupply-POS-Update.zip`. MotoSupply checks it before changing anything:
+   - **Signature:** official release key.
+   - **Checksums:** every file.
+   - **Paths:** no unsafe or absolute paths and no links. Only `app/`, `assets/`, `database/migrations/`, `index.php` and the security `.htaccess` files can be written.
+   - **Version:** must be newer; downgrades are refused.
+   - **Folders:** must be writable.
+3. Read the summary (version, changed files, database changes) and click **Install update**. MotoSupply then:
+   1. backs up the database and the current application files to `storage/backups/` (download links on the page);
+   2. switches to maintenance mode;
+   3. stages and installs the files;
+   4. applies database updates;
+   5. checks the result.
+4. If any step fails, the previous files are put back automatically and the page says what happened. **Restore previous files** under *Update history and backups* restores the files from before an update, and removes files the update added.
+
+### From 1.0, 1.1 or 1.2 (no in-app updater yet): upload by hand, once
+1. **Back up** (see [Backups](#backups)). Download the database with phpMyAdmin → Export.
+2. Unzip `MotoSupply-POS-Update.zip` on your computer.
+3. Upload its contents into your MotoSupply folder, replacing existing files. The ZIP has no `install/`, `config/`, `storage/` or `uploads/` content, so your settings, data and images stay.
+4. Open MotoSupply. On the first visit it backs up the database to `storage/backups/` and then applies the 1.3 database update. If the backup cannot be written, nothing is changed and the page says how to fix the folder permission.
+5. Sign in with your usual account. Existing accounts become **Administrators**.
+6. Recommended next steps:
+   - set your void approval PIN in **My Account**;
+   - open **Inventory → Integrity check** to review historical stock;
+   - create staff accounts in **Users**.
+7. You may delete `motosupply-update.json`, `motosupply-update.sig`, `UPDATE-README.md` and `CHANGELOG.md` from the website folder. They are blocked from the web anyway.
+
+### Recovery
+- **Files:** each update's backup folder `storage/backups/update-…/` has `files.zip`. Use **Restore previous files** in Settings → Updates, or unzip `files.zip` over the website folder with the File Manager.
+- **Database:** `storage/backups/*.sql.gz` (or `.sql`) are full dumps. In phpMyAdmin, select the database → **Import** the file. This replaces the current data with the backup's, so download a fresh export first.
+- Database updates only add tables and columns, so after rolling back files the previous version keeps working with the updated database.
 
 ---
 
@@ -191,6 +267,23 @@ Back up regularly, and always before an update.
   - Sessions use HttpOnly and SameSite cookies, plus Secure on HTTPS.
   - Sessions time out after 30 minutes of inactivity.
   - Logins are throttled.
+- **Permissions**
+  - Every route declares the permission it needs and the server checks it on every request. Anything not declared is denied, and refused requests are written to the audit log.
+  - Nobody can change their own role or permissions, grant permissions they do not hold, or remove the last administrator.
+- **Voids**
+  - A separate, hashed void PIN (never the login password) is required, plus a reason and the void permission.
+  - Approval is rate-limited, CSRF-protected, recorded with requester and approver, and possible only once per sale.
+- **Stock integrity**
+  - Every sale and adjustment runs in a database transaction with row locks.
+  - MotoSupply refuses to sell on tables that cannot roll back (MyISAM).
+  - The database itself rejects negative stock (`UNSIGNED`).
+- **Secrets**
+  - The SMTP password is stored encrypted (libsodium) and is never sent unencrypted to a remote server.
+  - The scheduler secret is stored only as a SHA-256 fingerprint.
+  - The audit log strips anything that looks like a password, PIN, token or key.
+- **Updates**
+  - Packages need a valid Ed25519 signature from the release key; the private key is never in the packages or the repository.
+  - Every file is checked against its SHA-256 checksum, and only application code paths can be written.
 - **Requests and output**
   - Every page and API endpoint requires login.
   - SQL uses prepared statements.
@@ -213,9 +306,12 @@ Back up regularly, and always before an update.
   - Free hosting limits CPU and daily hits, so very large exports may be slow.
 - **Features**
   - **Payments:** cash only.
-  - **Accounts:** one administrator; no cashier accounts.
   - **Corrections:** whole-sale voids only, no item-level returns.
-  - **Not included:** customers, held sales, tax/VAT, CSV import and multi-store. These were not in the requirements.
+  - **Not included:** customers, held sales, tax/VAT and multi-store. These were not in the requirements.
+  - **Roles:** the five built-in roles cannot be renamed. Use per-user permissions (or the Custom role) for other combinations.
+  - **Email reports:** need a scheduler (cron, an external HTTPS scheduler, or the on-visit fallback), because PHP cannot run on a timer by itself. Some free hosts block outgoing SMTP.
+  - **Automatic receipt printing** still shows the browser's print dialog unless the browser is set up for kiosk/silent printing. Browsers do not allow websites to detect printers.
+  - **Updater** needs the PHP `zip` and `sodium` extensions. Without them, update by uploading files (see Updating).
   - No Purchase Orders, by design.
 - **Printing and PDFs**
   - Receipts print through the browser. There is no direct thermal-printer driver.

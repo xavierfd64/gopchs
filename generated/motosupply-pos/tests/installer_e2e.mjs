@@ -192,7 +192,9 @@ await step('Database state after install: one hashed admin, schema version, shop
   const row = sql(`SELECT username, LEFT(password_hash,4), must_change_password FROM \`${DB}\`.users`);
   assert(row === `${ADMIN}\t$2y$\t0`, row);
   assert(sql(`SELECT COUNT(*) FROM \`${DB}\`.users WHERE password_hash = '${ADMIN_PW}'`) === '0', 'no plaintext');
-  assert(sql(`SELECT version FROM \`${DB}\`.schema_migrations`) === '1');
+  assert(sql(`SELECT GROUP_CONCAT(version ORDER BY version) FROM \`${DB}\`.schema_migrations`) === '1,2', 'all migrations applied');
+  assert(sql(`SELECT r.slug FROM \`${DB}\`.users u JOIN \`${DB}\`.roles r ON r.id = u.role_id`) === 'administrator', 'admin has the Administrator role');
+  assert(sql(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '${DB}' AND engine <> 'InnoDB'`) === '0', 'all tables InnoDB');
   assert(sql(`SELECT setting_value FROM \`${DB}\`.settings WHERE setting_key='shop_address'`) === '128 Rizal Avenue, Quezon City');
   assert(fs.existsSync(`${ROOT}/storage/installed.lock`));
   assert(!fs.readFileSync(`${ROOT}/storage/logs/` + fs.readdirSync(`${ROOT}/storage/logs`).find((f) => f.endsWith('.log')), 'utf8').includes(DBPASS), 'password not in logs');

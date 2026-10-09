@@ -5,3 +5,10 @@ src/storage/logs/*.log
 src/storage/sessions/
 src/uploads/products/*
 !src/uploads/products/index.html
+src/storage/backups/
+src/storage/updates/
+src/storage/imports/
+src/storage/migrate.lock
+src/storage/maintenance.flag
+src/uploads/branding/
+*.key

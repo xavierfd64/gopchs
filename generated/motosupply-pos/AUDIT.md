@@ -94,3 +94,50 @@ Any failure rolls the whole transaction back. A repeated `client_token` returns 
   - production: HTTPS enforced, with loop protection. It can only be enabled over HTTPS.
 - **Logging:** falls back to the host's private PHP error log when `storage/logs` is not writable. System Check reports which one is in use.
 - No database schema change; existing installations keep their data.
+
+## Version 1.3.0: bug fixes and system enhancements
+- **Oversale root cause (P1):**
+  - **Probes:**
+    - Single-till rules were already right (99 in stock, 100 sold → refused).
+    - With MyISAM tables (MySQL silently substitutes MyISAM when InnoDB is unavailable), 8 concurrent buyers of 1 unit gave 1 accepted sale but 4 `sale_items` rows. The rejected sales could not roll back.
+    - The schema also allowed negative stock through direct updates.
+  - **Fixes:**
+    - `NO_ENGINE_SUBSTITUTION`, and an InnoDB conversion in migration 002.
+    - `SaleService::assertTransactional()` refuses sales and adjustments on non-transactional tables.
+    - `products.stock_qty` is `INT UNSIGNED`. This is applied only when no product is negative, so historical data is never rewritten; otherwise it is enabled from the integrity page after correction.
+    - Voids return only what the stock ledger shows was deducted.
+- **Historical data:** `StockIntegrity::scan()` is read-only. Corrections go through audited paths:
+  - a count adjustment (stock movement + audit);
+  - an approved void (PIN);
+  - "mark reviewed" (`integrity_reviews` + audit).
+
+  Nothing is corrected automatically.
+- **Permissions:**
+  - Every route declares `perm` (or `auth`/`guest`); undeclared means denied. 403s are written to `audit_log`.
+  - `UserService` enforces: no self-escalation, no granting permissions you lack, Administrator role only by administrators, and protection of the last active administrator.
+  - Deactivation ends sessions on the next request (`Auth::load` requires `is_active`).
+- **Void approval:**
+  - The approver username plus a void PIN: 6–12 digits, no repeats or straight sequences, `password_hash`, must differ from the login password.
+  - `pin_attempts` rate limits: 5 per approver and 15 per IP in 15 minutes.
+  - CSRF on every POST. The conditional `UPDATE … WHERE status='completed'` inside the transaction prevents double voids.
+- **Audit log:** `Audit::log` strips keys matching pass/pin/secret/token/key/hash/csrf before storing. There is no edit or delete route; access requires `audit.view`.
+- **Secrets:**
+  - SMTP password: sodium secretbox (OpenSSL AES-GCM fallback) with a key derived from `app.secret` in the private config.
+  - Cron URL secret: only its SHA-256 is stored. The URL requires HTTPS and adds a random delay on failure.
+  - SMTP AUTH is refused over unencrypted connections except to localhost.
+- **Uploads:**
+  - **Branding:** checked with finfo + getimagesize (PNG/JPEG/WEBP; favicon PNG/ICO). Size and dimension limits; random names in `uploads/branding/`. SVG is not accepted (script risk).
+  - **`uploads/.htaccess`:** denies everything except image extensions and removes PHP handlers.
+  - **CSV import:** only `.csv`/`.txt` without NUL bytes or ZIP signatures, stored under `storage/imports/` (web-denied), deleted after use or after 1 hour.
+- **Updater:**
+  - **Trust:** an Ed25519 signature over the manifest. Public keys in `UpdateKeys`, plus optional `update_trusted_keys` in config. The private key lives outside the repository and the packages.
+  - **Package checks:**
+    - SHA-256 per file; path validation (no `..`, absolute, drive-letter or backslash paths); symlink detection from ZIP external attributes;
+    - unlisted entries rejected; target allow-list `app/`, `assets/`, `database/migrations/`, `index.php` and `.htaccess` files, so config, uploads, storage and install are never written;
+    - version must be newer; `min_version` is supported.
+  - **Install:** files are written one by one (no `ZipArchive::extractTo`) to staging, then by temp file + rename. Database dump + file backup first; maintenance flag; migrations; post-checks; automatic file restore on failure. File restore removes files the update added.
+- **Schema updates after a manual upload:** `SchemaUpdater` takes a lock, refuses to migrate without a successful backup, and then applies idempotent migrations.
+- **Accepted risks / notes:**
+  - The cron key can appear in web-server access logs when sent as a query parameter (POST is also accepted).
+  - Automatic printing cannot be silent in browsers.
+  - With opcache, a manual upload may serve old code for a few seconds (`opcache.revalidate_freq`).
