@@ -8,9 +8,10 @@ $db = $w['db']; $shop = $w['shop']; $admin = $w['admin'];
   <div><dt>Shop</dt><dd><?= e($shop['shop_name']) ?><?= $shop['shop_address'] !== '' ? ', ' . e($shop['shop_address']) : '' ?></dd></div>
   <div><dt>Timezone / currency</dt><dd><?= e($shop['timezone']) ?> · <?= e(Installer::CURRENCIES[$shop['currency_code']][0]) ?></dd></div>
   <div><dt>Administrator</dt><dd><?= e($admin['username']) ?></dd></div>
+  <div><dt>Security mode</dt><dd><?= \App\Core\Http::isHttps() ? 'Production: HTTPS required' : 'Testing: HTTP allowed with a warning on every page' ?></dd></div>
 </dl>
 <?php if (!\App\Core\Http::isHttps()): ?>
-  <div class="alert alert-info"><span>This page is not using HTTPS. That is fine for a test, but before real use install the free SSL certificate in your hosting panel and always open the site with <strong>https://</strong>.</span></div>
+  <div class="alert alert-error"><span><strong>Not secure (HTTP).</strong> This is a test installation. Do not use real passwords or business data until you install the free SSL certificate, open the site with <strong>https://</strong> and turn on <em>Require HTTPS</em> in Settings → System Check.</span></div>
 <?php endif; ?>
 <form method="post" action="<?= e(wizard_url('install')) ?>" class="wizard-actions" data-once>
   <?= csrf_field() ?>

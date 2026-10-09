@@ -19,7 +19,6 @@ use App\Core\Session;
 use App\Services\Requirements;
 
 Config::load([]); // no configuration yet
-Requirements::ensureDirectories();
 Http::securityHeaders();
 Session::start();
 
@@ -79,12 +78,17 @@ if (Http::isPost()) {
         $action = Http::post('action');
         switch ($step) {
             case 'requirements':
-                if (!Requirements::hasFailures(Requirements::check(true))) {
-                    $w['req_ok'] = true;
-                    Http::redirect(wizard_url('database'));
+                if (Requirements::hasFailures(Requirements::check(true))) {
+                    $errors['_form'] = 'Some requirements failed. Follow the "What to do" instructions, then click Recheck Requirements.';
+                    break;
                 }
-                $errors['_form'] = 'Please fix the failed items before continuing.';
-                break;
+                if (!Http::isHttps() && Http::post('testing_ack') !== '1') {
+                    $errors['_form'] = 'This connection is not encrypted. Tick the box to confirm this is a test installation, or open the installer with https:// instead.';
+                    break;
+                }
+                $w['req_ok'] = true;
+                $w['testing_ack'] = !Http::isHttps();
+                Http::redirect(wizard_url('database'));
 
             case 'database':
                 [$db, $errors] = Installer::validateDatabase($_POST, $w['db']['pass'] ?? null);
@@ -134,7 +138,11 @@ if (Http::isPost()) {
                 if (empty($w['db_ok']) || empty($w['shop']) || empty($w['admin'])) {
                     Http::redirect(wizard_url('database'));
                 }
-                $err = Installer::install($w['db'], $w['shop'], $w['admin']);
+                if (!Http::isHttps() && empty($w['testing_ack'])) {
+                    $w['req_ok'] = false; // switched from HTTPS to HTTP mid-way: confirm testing mode again
+                    Http::redirect(wizard_url('requirements'));
+                }
+                $err = Installer::install($w['db'], $w['shop'], $w['admin'], Http::isHttps() ? 'production' : 'testing');
                 if ($err === null) {
                     $username = $w['admin']['username'];
                     $private = Installer::$configLocation === 'private';

@@ -17,19 +17,24 @@ final class Logger
         self::write($line);
     }
 
-    public static function info(string $message): void
+    /** Returns true when written to storage/logs, false when the PHP error log fallback was used. */
+    public static function info(string $message): bool
     {
-        self::write('[' . gmdate('Y-m-d H:i:s') . ' UTC] INFO ' . $message);
+        return self::write('[' . gmdate('Y-m-d H:i:s') . ' UTC] INFO ' . $message);
     }
 
-    private static function write(string $line): void
+    /**
+     * Append to storage/logs/app-YYYY-MM.log. If that folder is not writable, fall back to the
+     * hosting provider's private PHP error log so the application never fails because of logging.
+     */
+    private static function write(string $line): bool
     {
         $dir = MOTO_ROOT . '/storage/logs';
         $line = str_replace(["\r", "\n"], ' ', $line) . PHP_EOL;
-        if (is_dir($dir) && is_writable($dir)) {
-            @file_put_contents($dir . '/app-' . gmdate('Y-m') . '.log', $line, FILE_APPEND | LOCK_EX);
-        } else {
-            error_log(trim($line));
+        if (is_dir($dir) && @file_put_contents($dir . '/app-' . gmdate('Y-m') . '.log', $line, FILE_APPEND | LOCK_EX) !== false) {
+            return true;
         }
+        @error_log('MotoSupply: ' . trim($line));
+        return false;
     }
 }

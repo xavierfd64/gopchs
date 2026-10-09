@@ -9,6 +9,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 const [BASE, ROOT, DB, SHOTS] = process.argv.slice(2);
 const DBPASS = 'motopass';
+const DBHOST = process.env.MOTO_DB_HOST || 'localhost';
 const ADMIN = 'shopowner';
 const ADMIN_PW = process.env.MOTO_INITIAL_PW || 'Initial#Pass2026';
 const results = [];
@@ -32,7 +33,7 @@ const consoleErrors = [];
 page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
 
 async function fillDb(over = {}) {
-  const v = { db_host: 'localhost', db_port: '3306', db_name: DB, db_user: 'moto', db_pass: DBPASS, ...over };
+  const v = { db_host: DBHOST, db_port: '3306', db_name: DB, db_user: 'moto', db_pass: DBPASS, ...over };
   for (const [k, val] of Object.entries(v)) await page.fill('#' + k, val);
 }
 
@@ -47,16 +48,27 @@ await step('Later steps cannot be skipped', async () => {
   await page.goto(BASE + '/install/index.php?step=install');
   assert(page.url().includes('step=requirements'), 'redirected back: ' + page.url());
 });
-await step('Requirements step shows Passed/Warning/Failed statuses', async () => {
+await step('Requirements step shows OK/Warning statuses, write-tested folders and HTTPS warning', async () => {
   await page.goto(BASE + '/install/');
   await page.click('a:has-text("Install")');
   await page.waitForURL(/step=requirements/);
   const txt = await page.textContent('.req-table');
-  for (const s of ['PHP version', 'PDO MySQL driver', 'PHP sessions', 'Application files', 'Security rules (.htaccess)', 'Folder config/', 'Folder storage/', 'HTTPS (SSL)']) assert(txt.includes(s), 'missing ' + s);
-  assert(txt.includes('Passed') && txt.includes('Warning'), 'statuses');
+  for (const s of ['PHP version', 'PDO MySQL driver', 'PHP sessions', 'Application files', 'Security rules (.htaccess files)', 'Folder config/', 'Folder storage/', 'Folder storage/logs/', 'Folder uploads/products/', 'HTTPS (SSL)']) assert(txt.includes(s), 'missing ' + s);
+  assert(txt.includes('Writable (write test passed)'), 'write test reported');
+  assert(txt.includes('OK') && txt.includes('Warning'), 'statuses');
   assert(!txt.includes('Failed'), 'no failures on this server');
-  assert(!/\/var\/www|\/home\//.test(txt), 'no server paths exposed');
+  assert(!/\/var\/www|\/home\/|\/srv\//.test(txt), 'no absolute server paths exposed');
+  assert(await page.isVisible('a:has-text("Recheck Requirements")'));
+  assert(fs.readdirSync(ROOT + '/storage/logs').every((f) => !f.startsWith('.moto-write-test-')), 'write-test files removed');
   await page.screenshot({ path: `${SHOTS}/w2-requirements.png`, fullPage: true });
+});
+await step('HTTP install requires the testing-mode confirmation', async () => {
+  assert(await page.isVisible('.ack-box'), 'testing warning shown');
+  await page.click('button:has-text("Continue")');
+  await page.waitForSelector('.alert-error');
+  assert((await page.textContent('.alert-error')).includes('not encrypted'));
+  assert(page.url().includes('step=requirements'));
+  await page.check('input[name=testing_ack]');
   await page.click('button:has-text("Continue")');
   await page.waitForURL(/step=database/);
 });
@@ -132,17 +144,26 @@ await step('Install summary shows no secrets', async () => {
   await page.screenshot({ path: `${SHOTS}/w7-ready.png`, fullPage: true });
 });
 await step('A failed install (config folder not writable) rolls back and can be retried', async () => {
-  sh(`chmod 555 ${ROOT}/config`);
+  // A folder PHP cannot fix by itself (owned by another user, like a misconfigured upload).
+  sh(`chown root:root ${ROOT}/config && chmod 755 ${ROOT}/config`);
   try {
     await page.click('button:has-text("Install MotoSupply")');
     await page.waitForSelector('.alert-error');
     const t = await page.textContent('.alert-error');
-    assert(t.includes('config/'), t);
+    assert(t.includes('Recheck Requirements'), t);
+    await page.goto(BASE + '/install/index.php?step=requirements');
+    const req = (await page.textContent('.req-table')).replace(/\s+/g, ' ');
+    assert(/Folder config\/ \(configuration \(database settings\)\) Failed Not writable \(write test failed\)/.test(req), 'config shown as Failed: ' + req.slice(0, 400));
+    assert(req.includes('(website folder)/') && req.includes('config/') && req.includes('Recheck Requirements'), 'instructions');
+    assert(!(await page.isVisible('button:has-text("Continue")')), 'cannot continue');
     const hasUsers = sql(`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB}' AND table_name='users'`) === '1';
     assert(!hasUsers || sql(`SELECT COUNT(*) FROM \`${DB}\`.users`) === '0', 'no administrator left behind');
     assert(!fs.existsSync(`${ROOT}/storage/installed.lock`), 'not locked');
     await page.screenshot({ path: `${SHOTS}/w8-install-error.png`, fullPage: true });
-  } finally { sh(`chmod 755 ${ROOT}/config`); }
+  } finally { sh(`chown 33:33 ${ROOT}/config`); }
+  // Recheck after fixing the folder: the status updates to OK.
+  await page.goto(BASE + '/install/index.php?step=requirements');
+  assert(/Folder config\/ \(configuration \(database settings\)\) OK Writable/.test((await page.textContent('.req-table')).replace(/\s+/g, ' ')), 'recheck shows OK');
   // Late failure: data and config already written, then the lock cannot be created.
   fs.mkdirSync(`${ROOT}/storage/installed.lock`);
   try {
@@ -183,6 +204,19 @@ await step('Go to Login works and the first login succeeds', async () => {
   await page.click('main form button[type=submit]');
   await page.waitForURL(/r=dashboard/);
   assert((await page.textContent('.store-card')).includes('MotoSupply Shop'));
+  assert(await page.isVisible('.insecure-banner:has-text("Testing mode only")'), 'HTTP testing banner visible after login');
+  assert(sql(`SELECT setting_value FROM \`${DB}\`.settings WHERE setting_key='security_mode'`) === 'testing', 'installed in testing mode');
+});
+await step('System Check: write-tested folders, log written, HTTPS cannot be required over HTTP', async () => {
+  await page.goto(BASE + '/index.php?r=settings.system');
+  const t = await page.textContent('main');
+  assert(t.includes('Writable (write test passed)') && t.includes('Application log') && t.includes('Written to storage/logs/'), 'checks');
+  assert(await page.isDisabled('button:has-text("Require HTTPS (production)")'), 'production switch disabled on HTTP');
+  // A forged POST is refused server-side too.
+  const tok = await page.getAttribute('#https form input[name=_csrf]', 'value');
+  await page.request.post(BASE + '/index.php?r=settings.security', { form: { _csrf: tok, mode: 'production' } });
+  assert(sql(`SELECT setting_value FROM \`${DB}\`.settings WHERE setting_key='security_mode'`) === 'testing', 'still testing');
+  await page.screenshot({ path: `${SHOTS}/w12-system-check.png`, fullPage: true });
 });
 const hashBefore = sql(`SELECT password_hash FROM \`${DB}\`.users`);
 await step('Installer is locked afterwards (GET and forged POSTs)', async () => {
@@ -209,9 +243,10 @@ await step('Even with the lock and config removed, an installed database is neve
   try {
     const c2 = await browser.newContext(); const p3 = await c2.newPage();
     await p3.goto(BASE + '/install/index.php?step=requirements');
+    await p3.check('input[name=testing_ack]');
     await p3.click('button:has-text("Continue")');
     await p3.waitForURL(/step=database/);
-    for (const [k, v] of Object.entries({ db_host: 'localhost', db_name: DB, db_user: 'moto', db_pass: DBPASS })) await p3.fill('#' + k, v);
+    for (const [k, v] of Object.entries({ db_host: DBHOST, db_name: DB, db_user: 'moto', db_pass: DBPASS })) await p3.fill('#' + k, v);
     await p3.click('button:has-text("Continue")');
     await p3.waitForSelector('.alert-error');
     assert((await p3.textContent('.alert-error')).includes('already contains a MotoSupply installation'));

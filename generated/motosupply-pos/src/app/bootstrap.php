@@ -9,7 +9,7 @@ declare(strict_types=1);
 if (!defined('MOTO_ROOT')) {
     define('MOTO_ROOT', dirname(__DIR__));
 }
-const MOTO_VERSION = '1.1.0';
+const MOTO_VERSION = '1.2.0';
 const MOTO_MIN_PHP = '8.1.0';
 const MOTO_SCHEMA_VERSION = 1;
 

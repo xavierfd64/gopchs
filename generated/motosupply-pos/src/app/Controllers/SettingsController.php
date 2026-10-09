@@ -110,22 +110,48 @@ final class SettingsController extends Controller
     /** Environment diagnostics, available only to logged-in administrators. */
     public function system(): void
     {
-        Requirements::ensureDirectories();
         $checks = Requirements::check(false);
         try {
             $dbVersion = (string) DB::value('SELECT VERSION()');
-            $checks[] = ['Database connection', Requirements::PASS, 'Connected (server ' . $dbVersion . ')', ''];
+            $checks[] = ['name' => 'Database connection', 'result' => 'Connected (server ' . $dbVersion . ')', 'status' => Requirements::OK, 'explain' => '', 'action' => ''];
         } catch (\Throwable) {
-            $checks[] = ['Database connection', Requirements::FAIL, 'Connection failed', 'Check the database settings in the configuration file.'];
+            $checks[] = ['name' => 'Database connection', 'result' => 'Connection failed', 'status' => Requirements::FAIL, 'explain' => 'The application cannot reach its database.', 'action' => 'Check that the database still exists in your hosting panel.'];
         }
+        // Prove that application logging works (or falls back safely).
+        $logged = \App\Core\Logger::info('System check run by ' . Auth::user()['username']);
+        $checks[] = $logged
+            ? ['name' => 'Application log', 'result' => 'Written to storage/logs/ (private)', 'status' => Requirements::OK, 'explain' => '', 'action' => '']
+            : ['name' => 'Application log', 'result' => 'Using the hosting provider\'s PHP error log', 'status' => Requirements::WARN, 'explain' => 'storage/logs/ is not writable, so errors go to the server\'s own private error log. Nothing else is affected.', 'action' => 'Fix the storage/logs/ folder permissions (see above), then reload this page.'];
         $_SESSION['_session_probe'] = ($_SESSION['_session_probe'] ?? 0) + 1;
-        $checks[] = ['Session persistence', Requirements::PASS, 'Probe count ' . (int) $_SESSION['_session_probe'] . ' (reload: it should increase)', ''];
+        $checks[] = ['name' => 'Session persistence', 'result' => 'Probe count ' . (int) $_SESSION['_session_probe'] . ' (reload: it should increase)', 'status' => Requirements::OK, 'explain' => '', 'action' => ''];
         $this->view('pages/system', [
             'title' => 'System check',
             'nav' => 'settings',
             'checks' => $checks,
             'pending' => Migrator::pending(),
+            'https' => Http::isHttps(),
+            'mode' => Settings::get('security_mode', 'testing'),
+            'override' => \App\Core\Config::get('app.force_https'),
+            'proxyHint' => Http::untrustedProxySaysHttps(),
         ]);
+    }
+
+    /** Switch between testing mode (HTTP allowed with a warning) and production (HTTPS required). */
+    public function security(): void
+    {
+        $mode = Http::post('mode');
+        if ($mode === 'production') {
+            if (!Http::isHttps()) {
+                Http::flash('error', 'Open this page with https:// first. HTTPS can only be required once a secure connection is confirmed, so you cannot lock yourself out.');
+                Http::redirect(url('settings.system') . '#https');
+            }
+            Settings::set(['security_mode' => 'production']);
+            Http::flash('success', 'HTTPS is now required. Visitors using http:// are redirected to https://.');
+        } elseif ($mode === 'testing') {
+            Settings::set(['security_mode' => 'testing']);
+            Http::flash('success', 'Testing mode enabled: plain HTTP is allowed again (with a warning).');
+        }
+        Http::redirect(url('settings.system') . '#https');
     }
 
     public function migrate(): void

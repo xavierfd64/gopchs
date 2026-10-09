@@ -19,6 +19,8 @@ final class Settings
         'pos_auto_add_barcode' => '1',
         'pos_confirm_clear' => '1',
         'show_low_stock_badge' => '1',
+        // testing: HTTP allowed with a visible warning; production: HTTPS required (set in System Check).
+        'security_mode' => 'testing',
     ];
 
     private static ?array $cache = null;

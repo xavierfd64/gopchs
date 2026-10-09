@@ -10,7 +10,7 @@ A point-of-sale and inventory system for a motorcycle parts shop. It runs on ord
 You never need to edit files, import SQL, or use Composer, npm, Node.js or a terminal.
 
 - **Package:** `MotoSupply-POS-Installer.zip`
-- **Needs:** PHP 8.1 or newer (8.3 recommended), MySQL or MariaDB, Apache hosting with `.htaccess` (InfinityFree and cPanel hosts have this)
+- **Needs:** PHP 8.1 or newer (tested on 8.3 and 8.4), MySQL or MariaDB, Apache hosting with `.htaccess` (InfinityFree and cPanel hosts have this). A free SSL certificate (HTTPS) is needed for real use.
 - **Includes:** Dashboard, POS with barcode-scanner support, Products / Inventory, Sales History, Reports (PDF and CSV), Settings
 
 > The names below (`sql123.infinityfree.com`, `if0_12345678`, …) are **examples**. Always use the values from your own hosting control panel.
@@ -47,9 +47,13 @@ You never need to edit files, import SQL, or use Composer, npm, Node.js or a ter
 
 ### C. Run the installation wizard (browser)
 6. **Open your website**, e.g. `https://yoursite.com` or `https://yoursite.com/pos`. The wizard starts automatically. If it doesn't, open `/install/`.
-7. **Welcome → Requirements:** the wizard checks your server. Every item should say **Passed**.
-   - **Warning** is fine; for example, *HTTPS* shows a warning until SSL is active.
-   - **Failed** items explain how to fix them.
+7. **Welcome → Requirements:** the wizard checks your server and **fixes what it safely can by itself**:
+   - It creates missing folders (`storage/logs`, `uploads/products`, …).
+   - It corrects their permissions (to 755, never 777), or recreates a folder that was uploaded with the wrong owner.
+   - It then proves each folder works with a real write test.
+
+   Each item shows **OK**, **Warning** (worth fixing, does not block) or **Failed** (must be fixed). Anything the wizard cannot fix comes with a "What to do" instruction. Fix it in the File Manager, then click **Recheck Requirements**.
+   - **On `http://` (no SSL yet):** you may continue **only as a test installation**. Tick the confirmation box, and do not use real passwords or business data until HTTPS is active (see below).
 8. **Database:** enter the host, database name, username and password from step 3.
    - Click **Test connection**. You should see *"Connection successful"*.
    - Then click **Continue**.
@@ -65,7 +69,31 @@ You never need to edit files, import SQL, or use Composer, npm, Node.js or a ter
 
 The installer is now **locked**. It cannot run again, and it can never reset your password or overwrite your data. For extra safety you may delete the `install` folder in the File Manager.
 
-**Last step: turn on HTTPS.** Install the free SSL certificate in your hosting panel (InfinityFree: **Free SSL Certificates**) and always open the site with `https://`. If you install over `https://`, the system automatically forces HTTPS afterwards.
+**Last step: turn on HTTPS** (see the next section). A site installed over `http://` runs in **testing mode** and shows a yellow "Not secure" bar on every page until you do.
+
+---
+
+## HTTPS: testing mode and production mode
+
+| Mode | When | What happens |
+|---|---|---|
+| **Testing** | Installed over `http://`, or switched back for testing | HTTP is allowed. Every page shows a yellow **"Not secure. Testing mode only"** bar. Logins, sessions and every other protection still work normally. |
+| **Production** | Installed over `https://`, or switched on in **Settings → System Check** | HTTPS is **required**: `http://` visits are redirected to `https://`, and session cookies are marked Secure. |
+
+**How to enable HTTPS after a test installation:**
+1. **Get the free SSL certificate.**
+   - **InfinityFree:** Client Area → your account → **Free SSL Certificates** → choose your domain → follow the verification steps (usually adding a CNAME record) → **Install** the issued certificate. It can take a little while to become active.
+   - **cPanel:** **SSL/TLS Status** → select your domain → **Run AutoSSL**.
+2. Open your site with **`https://`** and check that the browser shows a padlock.
+3. Log in → **Settings → System Check** → **Require HTTPS (production)**. This button only works when the page itself is open over HTTPS, so you cannot lock yourself out.
+
+**HTTPS behind a proxy (CDN or load balancer):** some setups, such as Cloudflare, handle SSL in front of the server, so PHP only sees `http`. For safety MotoSupply does **not** trust `X-Forwarded-Proto` headers from just anyone. Add the proxy's IP ranges to the configuration file, for example:
+```php
+'app' => [ ..., 'trusted_proxies' => ['173.245.48.0/20', '103.21.244.0/22'] ],
+```
+(Use the official IP list published by your proxy provider.) If the site is set to require HTTPS but the server cannot confirm it, MotoSupply shows a **"Secure connection problem"** page instead of looping between redirects.
+
+**Locked out after enabling HTTPS?** In phpMyAdmin, open the `settings` table and set `security_mode` to `testing`. Alternatively, add `'force_https' => false,` to the `app` section of the configuration file.
 
 ---
 
@@ -99,11 +127,12 @@ The installer is now **locked**. It cannot run again, and it can never reset you
 | "This database user is not allowed to use that database" / "cannot create tables" | cPanel: **MySQL® Databases → Add User To Database → ALL PRIVILEGES**. |
 | "…tables with the same names… from another application" | That database belongs to another app. Create a new, empty database for MotoSupply. |
 | "…already contains a MotoSupply installation" | MotoSupply is already installed in that database. Log in normally, or use a new empty database to start fresh. |
-| Requirements: **Folder … Not writable** | File Manager → right-click the folder → **Permissions** → `755` (try `775` if 755 fails). |
+| Requirements: **Folder … Not writable (write test failed)** | The wizard already tried to fix it automatically. In the File Manager, go to the folder shown (e.g. *(website folder)/storage/logs/*) → right-click → **Permissions** → `755` (try `775` if 755 fails; never `777`). If the folder is missing, create it with **New Folder**. Then click **Recheck Requirements**. `storage/logs` and `uploads/products` are Warnings: MotoSupply still works (logs go to the host's private PHP error log, and product images are disabled until it is fixed). `config` and `storage` are Failed and must be fixed. |
+| Folders named `.logs-unwritable-…` or `.products-unwritable-…` | Left behind when the wizard recreated a folder your upload created with the wrong owner. They contain only placeholder files, are blocked from the web, and can be deleted. |
 | Requirements: **Security rules (.htaccess) Missing** / **Application files Missing** | Some files did not upload. Use the File Manager's **Extract**, or enable hidden files in your FTP program and upload again. |
 | Blank page or "500 Internal Server Error" right after uploading | Your host may reject a directive in the main `.htaccess`. Delete the `<IfModule mod_headers.c> … </IfModule>` block from the `.htaccess` in the website folder and reload. Keep the other `.htaccess` files. |
 | "This page expired" in the wizard | Reload the page and try again. Make sure cookies are allowed for your site. |
-| Redirect loop after enabling HTTPS | SSL is not active yet. Wait for the certificate, or set `'force_https' => false` in the config file (see "Where is my configuration?"). |
+| "Secure connection problem" page | The site requires HTTPS but the server could not confirm it. Wait for the SSL certificate to become active, or see "HTTPS behind a proxy" above. To get back in meanwhile, set `security_mode` to `testing` in the `settings` table (phpMyAdmin). |
 | Locked out after failed logins | Wait 15 minutes. 5 wrong passwords for a username, or 20 from one network, pause logins for 15 minutes. |
 
 ### Where is my configuration?
@@ -170,12 +199,16 @@ Back up regularly, and always before an update.
   - `app/`, `config/`, `database/`, `storage/` and the installer's internal folders are blocked from the web by `.htaccess`.
   - `uploads/` never executes scripts.
   - There is no public `phpinfo()`. Server diagnostics are only in **Settings → System Check**, for logged-in administrators.
-- **Production**
-  - Use **HTTPS** for production.
+- **HTTPS**
+  - HTTPS is detected only from the web server itself. Proxy headers are trusted only from configured proxies.
+  - Testing mode (HTTP) shows a warning on every page.
+  - Production mode enforces HTTPS and is protected against redirect loops.
+- **Folders**
+  - Created with 755 (never 777), verified with a real write test, and protected with `.htaccess` (logs and sessions denied; uploads serve images only and never execute scripts).
 
 ## Known limitations
 - **Hosting**
-  - Tested on PHP 8.3 + MariaDB 10.11 with Apache. **Not yet verified on a live InfinityFree account.** Follow `INSTALLATION-CHECKLIST.md` on your site.
+  - Tested on PHP 8.3 and PHP 8.4 with MariaDB 10.11 and Apache. **Not yet verified on a live InfinityFree account.** Follow `INSTALLATION-CHECKLIST.md` on your site.
   - InfinityFree shows a browser "security check" to new visitors. Normal browsers pass it automatically.
   - Free hosting limits CPU and daily hits, so very large exports may be slow.
 - **Features**

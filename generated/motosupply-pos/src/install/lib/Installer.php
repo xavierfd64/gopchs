@@ -181,7 +181,7 @@ final class Installer
      * Run the installation. Returns null on success or a user-safe error message.
      * Steps that can be undone are undone on failure so the wizard can be retried.
      */
-    public static function install(array $db, array $shop, array $admin): ?string
+    public static function install(array $db, array $shop, array $admin, string $securityMode = 'testing'): ?string
     {
         $lock = @fopen(MOTO_ROOT . '/storage/install.lock.tmp', 'c');
         if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
@@ -197,8 +197,8 @@ final class Installer
             if ($e1 || $e2 || $admin['hash'] === '' || !preg_match('/^[A-Za-z0-9._\-]{3,50}$/', $admin['username'])) {
                 return 'Some information is missing or invalid. Go back through the steps and check each one.';
             }
-            if (!is_writable(MOTO_ROOT . '/config') || !is_writable(MOTO_ROOT . '/storage')) {
-                return 'The config/ or storage/ folder is not writable. Set their permissions to 755 (or 775) in the File Manager, then try again.';
+            if (\App\Services\Requirements::hasFailures(\App\Services\Requirements::check(true))) {
+                return 'A server requirement is no longer met (for example a folder became unwritable). Go back to the Requirements step, follow the instructions and click Recheck Requirements.';
             }
             [$pdo, $err] = self::connect($db);
             if ($pdo === null) {
@@ -226,7 +226,7 @@ final class Installer
             // 7–8. Administrator and shop settings in one transaction.
             $now = Clock::nowUtc();
             try {
-                DB::transaction(static function () use ($pdo, $shop, $admin, $now): void {
+                DB::transaction(static function () use ($pdo, $shop, $admin, $now, $securityMode): void {
                     if ((int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() > 0) {
                         throw new RuntimeException('users exist');
                     }
@@ -238,6 +238,8 @@ final class Installer
                         'currency_code' => $shop['currency_code'],
                         'currency_symbol' => self::CURRENCIES[$shop['currency_code']][1],
                         'installed_at' => $now,
+                        // production = HTTPS required; testing = installed over HTTP, warning shown.
+                        'security_mode' => $securityMode === 'production' ? 'production' : 'testing',
                     ]);
                     $pdo->prepare(
                         'INSERT INTO users (username, password_hash, full_name, role, must_change_password, is_active, created_at, updated_at)
@@ -256,7 +258,9 @@ final class Installer
                 'db' => $db,
                 'app' => [
                     'debug' => false,
-                    'force_https' => \App\Core\Http::isHttps(),
+                    // HTTPS enforcement follows Settings → System Check ("Require HTTPS").
+                    // Proxies listed here may set X-Forwarded-Proto (see README "HTTPS behind a proxy").
+                    'trusted_proxies' => [],
                     'session_idle_seconds' => 1800,
                     'session_absolute_seconds' => 43200,
                     'secret' => bin2hex(random_bytes(32)),

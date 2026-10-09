@@ -107,6 +107,11 @@ a.strong:hover { color: var(--accent); }
 .icon-btn .dot { position: absolute; top: 6px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .menu-btn { display: none; }
 
+/* Testing-mode warning (shown only on plain HTTP) */
+.insecure-banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 26px; background: #fff4d6; color: #6b4a00; border-bottom: 1px solid #f0d58c; font-size: 13px; }
+.insecure-banner a { color: inherit; font-weight: 600; }
+.guest .insecure-banner { width: min(560px, 100%); border: 1px solid #f0d58c; border-radius: var(--radius); }
+
 /* ---------- Page ---------- */
 .main { flex: 1; padding: 28px 32px 40px; outline: none; min-width: 0; }
 .page { max-width: 1460px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
@@ -485,3 +490,11 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
   .req-table td { border: 0; padding: 0 4px; }
   .req-table td:last-child { grid-column: 1 / -1; color: var(--muted); }
 }
+
+.req-explain { display: block; color: var(--text); font-size: 12px; margin-top: 4px; }
+.req-action { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; }
+.req-action strong { color: var(--text); }
+.ack-box { border: 1px solid #f0d58c; background: #fffaeb; border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.ack-box label { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; cursor: pointer; }
+.ack-box input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+.mode-box { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }

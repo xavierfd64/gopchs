@@ -11,6 +11,8 @@ Tick each item on your live site. If something fails, write down the exact messa
 ## 2. Wizard
 - [ ] Opening the website shows the **Welcome** step
 - [ ] **Requirements:** no **Failed** items. Note the PHP version shown: ______
+- [ ] Every folder row says *Writable (write test passed)*. If not, follow its "What to do" text and click **Recheck Requirements**
+- [ ] On `http://`: testing-mode box ticked (test installation only)
 - [ ] **Database:** "Test connection" shows *Connection successful*
 - [ ] **Shop:** name, timezone (Asia/Manila) and currency (PHP) entered
 - [ ] **Administrator:** strong password accepted and saved in a password manager
@@ -25,13 +27,16 @@ Tick each item on your live site. If something fails, write down the exact messa
 - [ ] `https://yoursite/install/lib/Installer.php`
 - [ ] `https://yoursite/database/migrations/001_initial_schema.sql`
 - [ ] `https://yoursite/README.md`
-- [ ] HTTPS active (padlock in the browser); `http://` redirects to `https://` if you installed over HTTPS
+- [ ] Free SSL certificate installed; site opens with `https://` (padlock)
+- [ ] **Settings → System Check → Require HTTPS (production)** turned on; `http://` now redirects to `https://`
+- [ ] Yellow "Not secure" bar no longer appears
 - [ ] **Settings → System Check:** all items Passed (HTTPS too, once SSL is active)
 
 ## 4. First-use test
 - [ ] Log in, log out, log back in
 - [ ] **Settings:** address, phone and receipt footer saved
 - [ ] **Inventory:** add 2 products (one with a barcode); a duplicate SKU is rejected
+- [ ] Upload a product image; it shows in the product list
 - [ ] **Adjust stock:** the change appears in Stock history
 - [ ] **POS:** find a product by name, by SKU and by barcode (scanner or type + Enter)
 - [ ] **POS:** complete a cash sale; change is correct; receipt prints
@@ -42,6 +47,7 @@ Tick each item on your live site. If something fails, write down the exact messa
 - [ ] Pages look right on a phone or tablet
 
 ## 5. Before real use
+- [ ] Running in **production mode** over HTTPS (never enter real passwords over `http://`)
 - [ ] Test products and sales removed (or reinstall into a fresh database; see README "Reinstalling")
 - [ ] First database backup exported from phpMyAdmin and kept off the server
 - [ ] Backup routine agreed (e.g. weekly export plus before every update)

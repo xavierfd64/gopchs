@@ -20,9 +20,21 @@ if (!Config::exists()) {
     Http::redirect(Http::basePath() . '/install/');
 }
 Config::load();
-if (Config::get('app.force_https', false) === true && !Http::isHttps()) {
-    $host = preg_replace('/[^A-Za-z0-9.\-:]/', '', (string) ($_SERVER['HTTP_HOST'] ?? ''));
+if (!Http::isHttps() && Http::httpsRequired()) {
+    // Redirect to HTTPS, but never loop: if a proxy terminates SSL without being trusted, or the
+    // previous redirect came straight back as "not HTTPS", explain instead of redirecting again.
+    $recent = (int) ($_COOKIE['moto_https_redirect'] ?? 0) > time() - 15;
+    if (Http::untrustedProxySaysHttps() || $recent) {
+        http_response_code(503);
+        App\Core\View::render('pages/https_problem', ['title' => 'Secure connection problem', 'proxy' => Http::untrustedProxySaysHttps()], 'layout/guest');
+        exit;
+    }
+    setcookie('moto_https_redirect', (string) time(), ['expires' => time() + 60, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax']);
+    $host = preg_replace('/[^A-Za-z0-9.\-:\[\]]/', '', (string) ($_SERVER['HTTP_HOST'] ?? ''));
     Http::redirect('https://' . $host . ($_SERVER['REQUEST_URI'] ?? '/'));
+}
+if (isset($_COOKIE['moto_https_redirect']) && Http::isHttps()) {
+    setcookie('moto_https_redirect', '', ['expires' => time() - 3600, 'path' => '/']);
 }
 
 Http::securityHeaders();
@@ -70,6 +82,7 @@ $routes = [
     'settings.password' => [SettingsController::class, 'password', ['POST'], []],
     'settings.system' => [SettingsController::class, 'system', ['GET'], []],
     'settings.migrate' => [SettingsController::class, 'migrate', ['POST'], []],
+    'settings.security' => [SettingsController::class, 'security', ['POST'], []],
 ];
 
 $route = Http::query('r', 'dashboard');

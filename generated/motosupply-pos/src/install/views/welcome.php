@@ -8,7 +8,7 @@
   <li><strong>A strong administrator password</strong>: at least 8 characters with a mix of letters, numbers and symbols.</li>
 </ul>
 <h2>Server requirements</h2>
-<p class="muted">PHP 8.1 or newer (8.3 recommended) with PDO MySQL, a MySQL or MariaDB database, and Apache hosting with .htaccess support. The next step checks these automatically.</p>
+<p class="muted">PHP 8.1 or newer (8.3 and 8.4 tested) with PDO MySQL, a MySQL or MariaDB database, and Apache hosting with .htaccess support. HTTPS (a free SSL certificate) is needed for real use. The next step checks all of this and fixes folder permissions automatically where possible.</p>
 <div class="wizard-actions">
   <a class="btn btn-primary" href="<?= e(wizard_url('requirements')) ?>">Install</a>
 </div>

@@ -79,3 +79,18 @@ Any failure rolls the whole transaction back. A repeated `client_token` returns 
 - **Config location:** stored outside the document root when the host allows it (`../motosupply-private/`), with only a relative pointer left in `config/config.php`. Otherwise it goes in the web-denied `config/` folder.
 - **Failure handling:** installs that fail after writing data are rolled back (admin, settings and config removed), so the wizard can be retried.
 - **Package:** `dist/MotoSupply-POS-Installer.zip`, built and checked by `tools/build-release.sh` and verified by `tests/verify_release.sh`.
+
+## Version 1.2.0: shared-hosting requirement fixes
+- **Folders:** prepared automatically (`Requirements::prepareDirectory`):
+  1. Create with 0755.
+  2. If not writable, `chmod` 0755 then 0775, only when PHP owns the folder; never 0777, no `chown`, no shell commands.
+  3. Otherwise, recreate a placeholder-only folder that was uploaded with another owner.
+
+  Every result is proven with a real write test: a random file opened in exclusive mode, so nothing is ever overwritten, and removed straight away.
+- **Statuses** are OK / Warning / Failed, each with the detected result, an explanation and an action, plus a **Recheck Requirements** button. Folder paths are shown relative to the website folder.
+- **HTTPS:** detected from server variables only. Forwarded headers count only from `app.trusted_proxies`, which also fixes the previous trust of any client's `X-Forwarded-Proto`.
+- **Security mode** (`settings.security_mode`):
+  - testing: HTTP allowed, with a warning on every page.
+  - production: HTTPS enforced, with loop protection. It can only be enabled over HTTPS.
+- **Logging:** falls back to the host's private PHP error log when `storage/logs` is not writable. System Check reports which one is in use.
+- No database schema change; existing installations keep their data.

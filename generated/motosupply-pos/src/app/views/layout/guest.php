@@ -11,6 +11,7 @@
 <body class="guest">
 <?php include MOTO_ROOT . '/app/views/partials/icons.php'; ?>
 <main class="guest-main" id="main">
+  <?php include MOTO_ROOT . '/app/views/partials/insecure_banner.php'; ?>
   <div class="guest-brand">
     <span class="brand-mark" aria-hidden="true">M</span>
     <span class="brand-text"><strong>MOTO<span>SUPPLY</span></strong><small>RETAIL SYSTEM</small></span>

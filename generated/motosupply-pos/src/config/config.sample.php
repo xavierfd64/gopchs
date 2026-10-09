@@ -20,5 +20,5 @@ return [
         'secret' => 'generate-a-long-random-string',
     ],
     'installed_at' => '',
-    'version' => '1.1.0',
+    'version' => '1.2.0',
 ];

@@ -7,11 +7,20 @@ use App\Core\Http;
 
 /**
  * Server requirement checks shared by the installation wizard and Settings → System Check.
- * Each check: [label, status pass|warn|fail, detail, fix]. Details never reveal paths or secrets.
+ *
+ * Every check is an array:
+ *   name    requirement name
+ *   result  what was actually detected
+ *   status  ok | warn | fail
+ *   explain plain-language explanation (when not ok)
+ *   action  what the user can do (when not ok)
+ *
+ * Results never contain absolute server paths or secrets; folders are shown relative to the
+ * website folder (e.g. "pos/storage/logs/").
  */
 final class Requirements
 {
-    public const PASS = 'pass';
+    public const OK = 'ok';
     public const WARN = 'warn';
     public const FAIL = 'fail';
 
@@ -32,84 +41,296 @@ final class Requirements
         'database/migrations/001_initial_schema.sql',
     ];
 
-    /** Create runtime folders that may be missing after an FTP upload (empty folders are sometimes skipped). */
+    /**
+     * Writable folders the application uses.
+     * level: what happens if it stays unwritable (fail = blocks installation).
+     * files: safe default files the folder must contain (name => content).
+     */
+    public const DIRECTORIES = [
+        'storage' => [
+            'level' => self::FAIL,
+            'purpose' => 'installation lock and private application data',
+            'impact' => 'MotoSupply cannot record that it is installed, so installation cannot continue.',
+            'files' => ['.htaccess' => self::DENY_ALL],
+        ],
+        'storage/logs' => [
+            'level' => self::WARN,
+            'purpose' => 'error logs (private)',
+            'impact' => 'Errors will be written to the hosting provider\'s PHP error log instead. Everything else works.',
+            'files' => ['.htaccess' => self::DENY_ALL, 'index.html' => ''],
+        ],
+        'storage/sessions' => [
+            'level' => self::WARN,
+            'purpose' => 'login sessions (private)',
+            'impact' => 'Logins will use the hosting provider\'s default session storage instead. Everything else works.',
+            'files' => ['.htaccess' => self::DENY_ALL, 'index.html' => ''],
+        ],
+        'uploads' => [
+            'level' => self::WARN,
+            'purpose' => 'uploaded files',
+            'impact' => 'Product images cannot be uploaded until this is fixed. Everything else works.',
+            'files' => ['.htaccess' => self::UPLOADS_HTACCESS, 'index.html' => ''],
+        ],
+        'uploads/products' => [
+            'level' => self::WARN,
+            'purpose' => 'product images',
+            'impact' => 'Product images cannot be uploaded until this is fixed. Everything else works.',
+            'files' => ['index.html' => ''],
+        ],
+    ];
+
+    public const DENY_ALL = "# Deny all direct web access to this directory.\n<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n";
+
+    public const UPLOADS_HTACCESS = "# Uploaded product images only. Nothing in this folder may be executed.\n<IfModule mod_authz_core.c>\n  Require all denied\n  <FilesMatch \"\\.(jpe?g|png|gif|webp)$\">\n    Require all granted\n  </FilesMatch>\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n  <FilesMatch \"\\.(jpe?g|png|gif|webp)$\">\n    Order deny,allow\n    Allow from all\n  </FilesMatch>\n</IfModule>\n<IfModule mod_mime.c>\n  RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .pl .py .cgi .shtml\n  RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar\n</IfModule>\n<IfModule mod_headers.c>\n  Header always set X-Content-Type-Options \"nosniff\"\n  Header always set Content-Security-Policy \"default-src 'none'; img-src 'self'\"\n</IfModule>\n";
+
+    /**
+     * Prove that PHP can create, write and delete a file in $dir. Uses a random file name
+     * opened in exclusive mode, so an existing file can never be overwritten.
+     */
+    public static function writeTest(string $dir): bool
+    {
+        if (!is_dir($dir)) {
+            return false;
+        }
+        $file = rtrim($dir, '/') . '/.moto-write-test-' . bin2hex(random_bytes(8));
+        $fh = @fopen($file, 'x');
+        if ($fh === false) {
+            return false;
+        }
+        $ok = @fwrite($fh, 'ok') === 2;
+        @fclose($fh);
+        $ok = $ok && @file_get_contents($file) === 'ok';
+        $removed = @unlink($file);
+        return $ok && $removed && !file_exists($file);
+    }
+
+    /** True when PHP runs as the owner of $path (so chmod is allowed). Unknown counts as "maybe". */
+    private static function ownedByPhp(string $path): bool
+    {
+        $owner = @fileowner($path);
+        if ($owner === false) {
+            return false;
+        }
+        $me = function_exists('posix_geteuid') ? posix_geteuid() : @getmyuid();
+        return $me === false || $owner === $me;
+    }
+
+    /** A folder that holds only MotoSupply's own placeholder files (safe to recreate). */
+    private static function onlyPlaceholders(string $dir): bool
+    {
+        $entries = @scandir($dir);
+        if ($entries === false) {
+            return false;
+        }
+        foreach ($entries as $e) {
+            if (in_array($e, ['.', '..', '.htaccess', 'index.html', '.gitkeep'], true) || str_starts_with($e, '.moto-write-test-')) {
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Prepare one folder: create it if missing, add its safe default files, and if PHP cannot
+     * write to it, try safe fixes — chmod 0755, then 0775 (only when PHP owns the folder; never
+     * 0777), then recreate it if it holds only placeholder files and its parent is writable.
+     * Every attempt is verified with a real write test.
+     *
+     * @return array{exists:bool,writable:bool,created:bool,fixed:string}
+     */
+    public static function prepareDirectory(string $root, string $rel): array
+    {
+        $dir = $root . '/' . $rel;
+        $spec = self::DIRECTORIES[$rel] ?? ['files' => []];
+        $created = false;
+        $fixed = '';
+        if (!is_dir($dir)) {
+            $old = umask(0022);
+            $created = @mkdir($dir, 0755, true);
+            umask($old);
+        }
+        if (is_dir($dir) && !self::writeTest($dir)) {
+            if (self::ownedByPhp($dir)) {
+                foreach ([0755, 0775] as $mode) {
+                    if (@chmod($dir, $mode)) {
+                        clearstatcache(true, $dir);
+                        if (self::writeTest($dir)) {
+                            $fixed = 'permissions set to ' . decoct($mode);
+                            break;
+                        }
+                    }
+                }
+            }
+            $parent = dirname($dir);
+            if ($fixed === '' && self::onlyPlaceholders($dir) && self::writeTest($parent)) {
+                // The folder was created with the wrong owner or mode (e.g. by an FTP upload).
+                // Move it aside and recreate it as PHP's own folder.
+                $aside = $parent . '/.' . basename($dir) . '-unwritable-' . bin2hex(random_bytes(3));
+                if (@rename($dir, $aside)) {
+                    $old = umask(0022);
+                    $made = @mkdir($dir, 0755);
+                    umask($old);
+                    if ($made && self::writeTest($dir)) {
+                        $fixed = 'folder recreated';
+                        @unlink($aside . '/index.html');
+                        @unlink($aside . '/.gitkeep');
+                        @unlink($aside . '/.htaccess');
+                        @rmdir($aside);
+                    } else {
+                        if (is_dir($dir)) {
+                            @rmdir($dir);
+                        }
+                        @rename($aside, $dir); // put it back exactly as it was
+                    }
+                }
+            }
+        }
+        $writable = is_dir($dir) && self::writeTest($dir);
+        if ($writable) {
+            foreach ($spec['files'] as $name => $content) {
+                if (!file_exists($dir . '/' . $name)) {
+                    @file_put_contents($dir . '/' . $name, $content);
+                }
+            }
+        }
+        return ['exists' => is_dir($dir), 'writable' => $writable, 'created' => $created, 'fixed' => $fixed];
+    }
+
+    /** Prepare every folder (and config/ when installing). Returns rel => result. */
+    public static function prepareDirectories(bool $installing, string $root = MOTO_ROOT): array
+    {
+        $out = [];
+        if ($installing) {
+            $out['config'] = self::prepareDirectory($root, 'config');
+        }
+        foreach (array_keys(self::DIRECTORIES) as $rel) {
+            $out[$rel] = self::prepareDirectory($root, $rel);
+        }
+        return $out;
+    }
+
+    /** Create missing runtime folders quietly (used on normal requests; no write tests). */
     public static function ensureDirectories(): void
     {
-        foreach (['storage', 'storage/logs', 'storage/sessions', 'storage/cache', 'uploads', 'uploads/products'] as $dir) {
-            $path = MOTO_ROOT . '/' . $dir;
-            if (!is_dir($path)) {
-                @mkdir($path, 0755, true);
+        foreach (array_keys(self::DIRECTORIES) as $rel) {
+            if (!is_dir(MOTO_ROOT . '/' . $rel)) {
+                self::prepareDirectory(MOTO_ROOT, $rel);
             }
         }
     }
 
-    /** @return list<array{0:string,1:string,2:string,3:string}> */
-    public static function check(bool $installing): array
+    /** Folder path as the user sees it in the File Manager, relative to the website folder. */
+    public static function displayPath(string $rel, string $root = MOTO_ROOT): string
+    {
+        $docRoot = (string) ($_SERVER['DOCUMENT_ROOT'] ?? '');
+        $docReal = $docRoot !== '' ? @realpath($docRoot) : false;
+        $rootReal = @realpath($root);
+        $prefix = '';
+        if ($docReal !== false && $rootReal !== false && str_starts_with($rootReal . '/', rtrim($docReal, '/') . '/')) {
+            $prefix = trim(substr($rootReal, strlen(rtrim($docReal, '/'))), '/');
+        }
+        return '(website folder)/' . ($prefix !== '' ? $prefix . '/' : '') . $rel . '/';
+    }
+
+    private static function row(string $name, string $result, string $status, string $explain = '', string $action = ''): array
+    {
+        return ['name' => $name, 'result' => $result, 'status' => $status, 'explain' => $explain, 'action' => $action];
+    }
+
+    /** @return list<array{name:string,result:string,status:string,explain:string,action:string}> */
+    public static function check(bool $installing, string $root = MOTO_ROOT): array
     {
         $c = [];
         $v = PHP_VERSION;
-        if (version_compare($v, '8.3.0', '>=')) {
-            $c[] = ['PHP version', self::PASS, "PHP $v", ''];
-        } elseif (version_compare($v, MOTO_MIN_PHP, '>=')) {
-            $c[] = ['PHP version', self::WARN, "PHP $v (8.3 recommended)", 'The system works, but select PHP 8.3 in your hosting panel (PHP version / MultiPHP Manager) if available.'];
+        if (version_compare($v, MOTO_MIN_PHP, '>=')) {
+            $c[] = self::row('PHP version', "PHP $v", self::OK);
         } else {
-            $c[] = ['PHP version', self::FAIL, "PHP $v", 'PHP ' . MOTO_MIN_PHP . ' or newer is required. Choose a newer PHP version in your hosting control panel, or ask your host.'];
+            $c[] = self::row('PHP version', "PHP $v", self::FAIL,
+                'MotoSupply needs PHP ' . MOTO_MIN_PHP . ' or newer.',
+                'Choose PHP 8.3 or 8.4 in your hosting control panel (PHP version selector / MultiPHP Manager), or ask your host.');
         }
 
-        $ext = static fn (string $name, string $label, string $level, string $fix): array =>
-            extension_loaded($name) ? [$label, self::PASS, 'Available', ''] : [$label, $level, 'Not available', $fix];
-        $c[] = $ext('pdo', 'PDO database extension', self::FAIL, 'Enable the "pdo" extension in your hosting PHP settings, or ask your host.');
-        $c[] = $ext('pdo_mysql', 'PDO MySQL driver', self::FAIL, 'Enable the "pdo_mysql" extension in your hosting PHP settings, or ask your host.');
-        $c[] = $ext('mbstring', 'mbstring extension', self::FAIL, 'Enable the "mbstring" extension in your hosting PHP settings, or ask your host.');
+        $ext = function (string $name, string $label, string $level, string $explain) use (&$c): void {
+            $c[] = extension_loaded($name)
+                ? self::row($label, 'Available', self::OK)
+                : self::row($label, 'Not available', $level, $explain,
+                    'Enable the "' . $name . '" PHP extension in your hosting control panel (Select PHP Version → Extensions), or ask your host.');
+        };
+        $ext('pdo', 'PDO extension', self::FAIL, 'MotoSupply uses PDO to talk to the database.');
+        $ext('pdo_mysql', 'PDO MySQL driver', self::FAIL, 'This driver is needed to connect to the MySQL database.');
+        $ext('mbstring', 'mbstring extension', self::FAIL, 'Needed to handle product names and text correctly.');
         $c[] = function_exists('json_encode')
-            ? ['JSON support', self::PASS, 'Available', '']
-            : ['JSON support', self::FAIL, 'Not available', 'Enable the "json" extension, or ask your host.'];
-        $c[] = $ext('fileinfo', 'fileinfo extension (product images)', self::WARN, 'Optional. Without it, product image uploads are disabled; everything else works.');
+            ? self::row('JSON support', 'Available', self::OK)
+            : self::row('JSON support', 'Not available', self::FAIL, 'The POS screen exchanges data as JSON.', 'Enable the "json" extension, or ask your host.');
+        $ext('fileinfo', 'fileinfo extension', self::WARN, 'Used to check uploaded product images. Without it, image uploads are disabled; everything else works.');
         $c[] = function_exists('gzcompress')
-            ? ['zlib (smaller PDF files)', self::PASS, 'Available', '']
-            : ['zlib (smaller PDF files)', self::WARN, 'Not available', 'Optional. PDF reports still work but are larger.'];
-        $c[] = function_exists('password_hash') && defined('PASSWORD_DEFAULT')
-            ? ['Password hashing', self::PASS, 'Available', '']
-            : ['Password hashing', self::FAIL, 'Not available', 'Your PHP build lacks password_hash(); ask your host for a standard PHP build.'];
-        $c[] = function_exists('random_bytes')
-            ? ['Secure random numbers', self::PASS, 'Available', '']
-            : ['Secure random numbers', self::FAIL, 'Not available', 'Ask your host for a standard PHP 8 build.'];
+            ? self::row('zlib (PDF compression)', 'Available', self::OK)
+            : self::row('zlib (PDF compression)', 'Not available', self::WARN, 'PDF reports still work but the files are larger.', 'Optional: enable the "zlib" extension.');
+        $c[] = function_exists('password_hash') && function_exists('random_bytes')
+            ? self::row('Password hashing & secure random', 'Available', self::OK)
+            : self::row('Password hashing & secure random', 'Not available', self::FAIL, 'Needed to store passwords safely.', 'Ask your host for a standard PHP 8 build.');
         $c[] = session_status() === PHP_SESSION_ACTIVE
-            ? ['PHP sessions', self::PASS, 'Working', '']
-            : ['PHP sessions', self::FAIL, 'Sessions could not be started', 'Make sure cookies are enabled in your browser and the storage/ folder is writable.'];
+            ? self::row('PHP sessions', 'Working', self::OK)
+            : self::row('PHP sessions', 'Not working', self::FAIL, 'Sessions keep you logged in.', 'Allow cookies for this site in your browser, then click Recheck Requirements. If it persists, ask your host to enable PHP sessions.');
 
-        $missing = array_values(array_filter(self::REQUIRED_FILES, static fn ($f) => !is_file(MOTO_ROOT . '/' . $f)));
+        $missing = array_values(array_filter(self::REQUIRED_FILES, static fn ($f) => !is_file($root . '/' . $f)));
         $c[] = $missing === []
-            ? ['Application files', self::PASS, 'All present', '']
-            : ['Application files', self::FAIL, 'Missing: ' . implode(', ', array_slice($missing, 0, 4)) . (count($missing) > 4 ? '…' : ''),
-                'Some files did not upload. Upload the ZIP again and extract it, making sure hidden files such as .htaccess are included.'];
-        $ht = ['.htaccess', 'app/.htaccess', 'config/.htaccess', 'storage/.htaccess', 'database/.htaccess', 'uploads/.htaccess'];
-        $missingHt = array_values(array_filter($ht, static fn ($f) => !is_file(MOTO_ROOT . '/' . $f)));
+            ? self::row('Application files', 'All present', self::OK)
+            : self::row('Application files', 'Missing: ' . implode(', ', array_slice($missing, 0, 4)) . (count($missing) > 4 ? '…' : ''), self::FAIL,
+                'Some files did not upload completely.',
+                'Upload MotoSupply-POS-Installer.zip again and use the File Manager\'s Extract function, then click Recheck Requirements.');
+        $ht = ['.htaccess', 'app/.htaccess', 'config/.htaccess', 'database/.htaccess', 'storage/.htaccess', 'uploads/.htaccess'];
+        $missingHt = array_values(array_filter($ht, static fn ($f) => !is_file($root . '/' . $f)));
         $c[] = $missingHt === []
-            ? ['Security rules (.htaccess)', self::PASS, 'Present', '']
-            : ['Security rules (.htaccess)', self::FAIL, 'Missing: ' . implode(', ', $missingHt),
-                'Hidden .htaccess files were not uploaded. Use the File Manager\'s Extract function, or enable "show hidden files" in your FTP program and upload them.'];
+            ? self::row('Security rules (.htaccess files)', 'Present', self::OK)
+            : self::row('Security rules (.htaccess files)', 'Missing: ' . implode(', ', $missingHt), self::FAIL,
+                'These hidden files stop visitors from opening private files. Some were not uploaded.',
+                'Use the File Manager\'s Extract function (it keeps hidden files), or turn on "show hidden files" in your FTP program and upload again.');
 
-        $dirs = $installing ? ['config' => self::FAIL] : [];
-        $dirs += ['storage' => self::FAIL, 'storage/logs' => self::WARN, 'storage/sessions' => self::WARN, 'uploads/products' => self::WARN];
-        foreach ($dirs as $dir => $level) {
-            $path = MOTO_ROOT . '/' . $dir;
-            if (is_dir($path) && is_writable($path)) {
-                $c[] = ["Folder $dir/", self::PASS, 'Writable', ''];
-            } else {
-                $c[] = ["Folder $dir/", $level, is_dir($path) ? 'Not writable' : 'Missing',
-                    "In the File Manager, make sure the $dir folder exists and set its permissions to 755 (or 775 if 755 does not work)."];
+        // Folders: prepare automatically, then report the verified result.
+        foreach (self::prepareDirectories($installing, $root) as $rel => $r) {
+            $spec = self::DIRECTORIES[$rel] ?? [
+                'level' => self::FAIL,
+                'purpose' => 'configuration (database settings)',
+                'impact' => 'The installer cannot save the database settings, so installation cannot continue.',
+            ];
+            $name = 'Folder ' . $rel . '/ (' . $spec['purpose'] . ')';
+            if ($r['writable']) {
+                $result = 'Writable (write test passed)' . ($r['created'] ? '; folder created' : '') . ($r['fixed'] !== '' ? '; fixed automatically: ' . $r['fixed'] : '');
+                $c[] = self::row($name, $result, self::OK);
+                continue;
             }
+            $path = self::displayPath($rel, $root);
+            $c[] = self::row($name, $r['exists'] ? 'Not writable (write test failed)' : 'Missing and could not be created', $spec['level'],
+                $spec['impact'] . ' The installer tried to fix this automatically but the hosting account does not allow it.',
+                'Open your hosting File Manager → go to ' . $path . ' → right-click the folder → Permissions (or "Change Permissions") → set 755 '
+                . '(owner: read, write, execute). If 755 does not work, try 775. Never use 777. '
+                . ($r['exists'] ? '' : 'If the folder is missing, create it first with "New Folder". ')
+                . 'Then click Recheck Requirements.');
         }
 
-        $c[] = Http::isHttps()
-            ? ['HTTPS (SSL)', self::PASS, 'Active', '']
-            : ['HTTPS (SSL)', self::WARN, 'Not active', 'Fine for testing. Before real use, install the free SSL certificate in your hosting panel and open the site with https://.'];
+        $c[] = self::httpsRow();
         return $c;
+    }
+
+    /** HTTPS status: ok when active, warning (testing only) otherwise. */
+    public static function httpsRow(): array
+    {
+        if (Http::isHttps()) {
+            return self::row('HTTPS (SSL)', 'Active', self::OK);
+        }
+        $proxy = Http::untrustedProxySaysHttps()
+            ? ' Your host appears to use a proxy that reports HTTPS; see "HTTPS behind a proxy" in README.md to make MotoSupply trust it.'
+            : '';
+        return self::row('HTTPS (SSL)', 'Not active: this connection is not encrypted', self::WARN,
+            'You may install over HTTP only as a test. Do not enter real passwords or business data until HTTPS is active.' . $proxy,
+            'In your hosting panel, install the free SSL certificate (InfinityFree: Client Area → Free SSL Certificates; cPanel: SSL/TLS Status → Run AutoSSL). '
+            . 'When https:// works, open the site with https:// and turn on "Require HTTPS" in Settings → System Check.');
     }
 
     public static function hasFailures(array $checks): bool
     {
-        return in_array(self::FAIL, array_column($checks, 1), true);
+        return in_array(self::FAIL, array_column($checks, 'status'), true);
     }
 }

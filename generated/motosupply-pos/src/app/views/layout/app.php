@@ -85,6 +85,7 @@ $items = [
       <a class="avatar avatar-sm" href="<?= e(url('settings')) ?>" title="Account settings" aria-label="Account settings"><?= e(person_initials($displayName)) ?></a>
     </div>
   </header>
+  <?php include MOTO_ROOT . '/app/views/partials/insecure_banner.php'; ?>
   <main id="main" class="main" tabindex="-1">
     <?php foreach (Http::takeFlash() as $f): ?>
       <div class="alert alert-<?= e($f['type']) ?>" role="<?= $f['type'] === 'error' ? 'alert' : 'status' ?>"><?= icon($f['type'] === 'error' ? 'alert' : 'check') ?><span><?= e($f['message']) ?></span></div>

@@ -86,6 +86,28 @@ await step('Duplicate SKU shows a field error', async () => {
   assert(await page.isVisible('text=Another product already uses this SKU.'));
   assert(await page.inputValue('#name') === 'Dup', 'form keeps entered values');
 });
+await step('Product image upload is stored and served', async () => {
+  const fs = await import('fs');
+  // 1x1 PNG
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  fs.writeFileSync(`${SHOTS}/tiny.png`, png);
+  await page.goto(url('products', '&q=MS-105'));
+  await page.click('a.strong:has-text("Motul C2")');
+  await page.setInputFiles('#image', `${SHOTS}/tiny.png`);
+  await page.click('main form.card button[type=submit]');
+  await page.waitForURL(/r=products$/);
+  await page.goto(url('products', '&q=MS-105'));
+  const src = await page.getAttribute('img.thumb', 'src');
+  assert(src && /uploads\/products\/[a-f0-9]{32}\.png$/.test(src), 'image path ' + src);
+  const r = await page.request.get(new URL(src, BASE).href);
+  assert(r.status() === 200 && (await r.body()).length === png.length, 'image served');
+  // A PHP file disguised as an image is rejected.
+  fs.writeFileSync(`${SHOTS}/evil.png`, '<?php echo 1;');
+  await page.click('a.strong:has-text("Motul C2")');
+  await page.setInputFiles('#image', `${SHOTS}/evil.png`);
+  await page.click('main form.card button[type=submit]');
+  assert(await page.isVisible('text=Upload a JPG, PNG, WEBP or GIF image.'));
+});
 await step('Inventory page renders with stock status', async () => {
   await page.goto(url('products'));
   assert(await page.isVisible('text=Out of Stock'));

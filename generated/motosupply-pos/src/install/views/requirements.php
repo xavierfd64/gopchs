@@ -1,30 +1,30 @@
 <?php defined('MOTO_ROOT') || exit;
+use App\Core\Http;
 use App\Services\Requirements;
 $failed = Requirements::hasFailures($checks);
-$labels = ['pass' => ['Passed', 'pill-success'], 'warn' => ['Warning', 'pill-warning'], 'fail' => ['Failed', 'pill-danger']];
+$warned = in_array(Requirements::WARN, array_column($checks, 'status'), true);
+$https = Http::isHttps();
 ?>
 <h1>System requirements</h1>
-<p class="lead">The installer checked this server. <?= $failed ? 'Some items failed and must be fixed before continuing.' : 'Everything required is in place.' ?></p>
-<div class="table-wrap">
-  <table class="table req-table">
-    <thead><tr><th scope="col">Requirement</th><th scope="col">Status</th><th scope="col">Details</th></tr></thead>
-    <tbody>
-    <?php foreach ($checks as [$label, $status, $detail, $fix]): ?>
-      <tr>
-        <td><?= e($label) ?></td>
-        <td><span class="pill <?= $labels[$status][1] ?>"><?= $labels[$status][0] ?></span></td>
-        <td><?= e($detail) ?><?php if ($fix !== ''): ?><small class="fix"><?= e($fix) ?></small><?php endif; ?></td>
-      </tr>
-    <?php endforeach; ?>
-    </tbody>
-  </table>
-</div>
-<form method="post" action="<?= e(wizard_url('requirements')) ?>" class="wizard-actions" data-once>
+<p class="lead">
+  <?php if ($failed): ?>Some items <strong>failed</strong> and must be fixed before installing. Each one says what to do.
+  <?php elseif ($warned): ?>Everything required is in place. Items marked <strong>Warning</strong> are worth fixing, but they do not block installation.
+  <?php else: ?>Everything is in place.<?php endif; ?>
+  Missing folders were created and permissions were corrected automatically where your hosting allows it.
+</p>
+<?php include MOTO_ROOT . '/app/views/partials/requirements_table.php'; ?>
+<form method="post" action="<?= e(wizard_url('requirements')) ?>" class="stack" data-once>
   <?= csrf_field() ?>
-  <a class="btn" href="<?= e(wizard_url('welcome')) ?>">Back</a>
-  <?php if ($failed): ?>
-    <a class="btn" href="<?= e(wizard_url('requirements')) ?>">Check again</a>
-  <?php else: ?>
-    <button type="submit" class="btn btn-primary">Continue</button>
+  <?php if (!$failed && !$https): ?>
+    <div class="ack-box" role="group" aria-labelledby="ack-title">
+      <strong id="ack-title">HTTP connection: not secure</strong>
+      <span>This installer is open over <strong>http://</strong>, so everything you type, including passwords, travels unencrypted. You can continue <strong>only as a test installation</strong>. MotoSupply will show a warning on every page until HTTPS is active. Before real use, install your host's free SSL certificate, open the site with <strong>https://</strong> and turn on <em>Require HTTPS</em> in Settings → System Check.</span>
+      <label><input type="checkbox" name="testing_ack" value="1"> I understand. This is a test installation, and I will not use real passwords or business data until HTTPS is active.</label>
+    </div>
   <?php endif; ?>
+  <div class="wizard-actions">
+    <a class="btn" href="<?= e(wizard_url('welcome')) ?>">Back</a>
+    <a class="btn" href="<?= e(wizard_url('requirements')) ?>">Recheck Requirements</a>
+    <?php if (!$failed): ?><button type="submit" class="btn btn-primary">Continue</button><?php endif; ?>
+  </div>
 </form>

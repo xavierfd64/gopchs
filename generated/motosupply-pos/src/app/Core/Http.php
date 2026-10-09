@@ -21,15 +21,90 @@ final class Http
         return self::$basePath;
     }
 
+    /**
+     * HTTPS detection from server-side indicators only. Forwarded headers (X-Forwarded-Proto,
+     * X-Forwarded-SSL) are honoured ONLY when the request comes from a proxy listed in
+     * config 'app.trusted_proxies' (IP addresses or CIDR ranges); anyone can send those headers.
+     */
     public static function isHttps(): bool
     {
-        if (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off') {
+        $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+        if ($https !== '' && $https !== 'off') {
+            return true;
+        }
+        if (strtolower((string) ($_SERVER['REQUEST_SCHEME'] ?? '')) === 'https') {
             return true;
         }
         if ((string) ($_SERVER['SERVER_PORT'] ?? '') === '443') {
             return true;
         }
-        return strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+        return self::fromTrustedProxy() && self::forwardedHttps();
+    }
+
+    private static function forwardedHttps(): bool
+    {
+        $proto = strtolower(trim(explode(',', (string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0]));
+        return $proto === 'https' || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '')) === 'on';
+    }
+
+    /** A forwarded header claims HTTPS but the sender is not a trusted proxy (used for guidance only). */
+    public static function untrustedProxySaysHttps(): bool
+    {
+        return !self::fromTrustedProxy() && self::forwardedHttps();
+    }
+
+    public static function fromTrustedProxy(): bool
+    {
+        $remote = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        $trusted = Config::get('app.trusted_proxies', []);
+        if ($remote === '' || !is_array($trusted)) {
+            return false;
+        }
+        foreach ($trusted as $range) {
+            if (is_string($range) && self::ipInRange($remote, $range)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** IPv4/IPv6 address match against a single IP or CIDR range. */
+    public static function ipInRange(string $ip, string $range): bool
+    {
+        [$net, $bits] = array_pad(explode('/', trim($range), 2), 2, null);
+        $ipBin = @inet_pton($ip);
+        $netBin = @inet_pton((string) $net);
+        if ($ipBin === false || $netBin === false || strlen($ipBin) !== strlen($netBin)) {
+            return false;
+        }
+        $max = strlen($ipBin) * 8;
+        $bits = $bits === null ? $max : (int) $bits;
+        if ($bits < 0 || $bits > $max) {
+            return false;
+        }
+        $bytes = intdiv($bits, 8);
+        if (substr($ipBin, 0, $bytes) !== substr($netBin, 0, $bytes)) {
+            return false;
+        }
+        $rem = $bits % 8;
+        if ($rem === 0) {
+            return true;
+        }
+        $mask = (0xFF << (8 - $rem)) & 0xFF;
+        return (ord($ipBin[$bytes]) & $mask) === (ord($netBin[$bytes]) & $mask);
+    }
+
+    /**
+     * Whether HTTPS must be enforced: config 'app.force_https' (true/false) overrides; otherwise
+     * the "Require HTTPS" (production) mode chosen in Settings → System Check.
+     */
+    public static function httpsRequired(): bool
+    {
+        $override = Config::get('app.force_https');
+        if (is_bool($override)) {
+            return $override;
+        }
+        return Settings::get('security_mode', 'testing') === 'production';
     }
 
     public static function method(): string
@@ -45,6 +120,22 @@ final class Http
     public static function clientIp(): string
     {
         $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+        // Behind a trusted proxy, the client is the right-most untrusted X-Forwarded-For entry.
+        if (self::fromTrustedProxy() && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $chain = array_reverse(array_map('trim', explode(',', (string) $_SERVER['HTTP_X_FORWARDED_FOR'])));
+            foreach ($chain as $candidate) {
+                if (filter_var($candidate, FILTER_VALIDATE_IP)) {
+                    $ip = $candidate;
+                    $isProxy = false;
+                    foreach ((array) Config::get('app.trusted_proxies', []) as $range) {
+                        $isProxy = $isProxy || (is_string($range) && self::ipInRange($candidate, $range));
+                    }
+                    if (!$isProxy) {
+                        break;
+                    }
+                }
+            }
+        }
         return filter_var($ip, FILTER_VALIDATE_IP) ? $ip : '0.0.0.0';
     }
 
