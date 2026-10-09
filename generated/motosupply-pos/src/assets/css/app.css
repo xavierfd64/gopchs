@@ -699,3 +699,13 @@ code.break, .break { word-break: break-all; }
 
 .change-list { margin: 0; padding-left: 1rem; }
 .change-list li { margin: 0 0 2px; }
+
+/* POS on desktops and landscape tablets: fixed-height shell so the cart (total, Pay, Clear) always
+   fits under the header and any notice banner; the product list scrolls by itself. */
+@media (min-width: 900px) and (min-height: 520px) {
+  .is-pos .main-wrap { height: 100vh; height: 100dvh; min-height: 0; }
+  .is-pos .main { min-height: 0; overflow: hidden; }
+  .is-pos .pos { min-height: 0; height: 100%; }
+  .is-pos .pos-products { overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+  .is-pos .pos-cart { position: static; height: auto; min-height: 0; }
+}

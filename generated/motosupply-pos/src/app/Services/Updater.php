@@ -136,8 +136,8 @@ final class Updater
             throw new \RuntimeException('This is not a valid ZIP file, or it is damaged.');
         }
         try {
-            if ($zip->numFiles < 2 || $zip->numFiles > self::MAX_ENTRIES) {
-                throw new \RuntimeException('The ZIP has an unexpected number of entries.');
+            if ($zip->numFiles > self::MAX_ENTRIES) {
+                throw new \RuntimeException('The ZIP has too many entries to be a MotoSupply update package.');
             }
             $names = [];
             for ($i = 0; $i < $zip->numFiles; $i++) {

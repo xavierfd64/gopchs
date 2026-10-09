@@ -7,6 +7,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const BASE = process.argv[2] || 'http://127.0.0.1:8080';
 const SHOTS = process.argv[3] || './screens';
 const NEW_PW = 'Moto$hop2026';
+const VOID_PIN = '482915';
 const ADMIN_USER = process.env.MOTO_ADMIN_USER || 'admin';
 const INITIAL_PW = process.env.MOTO_INITIAL_PW || 'Initial#Pass2026';
 const results = [];
@@ -14,7 +15,13 @@ let failed = 0;
 
 async function step(name, fn) {
   try { await fn(); results.push(['PASS', name]); console.log('  PASS ', name); }
-  catch (e) { failed++; results.push(['FAIL', name, String(e.message || e).split('\n')[0]]); console.log('  FAIL ', name, '\n       ', String(e.message || e).split('\n')[0]); }
+  catch (e) {
+    failed++;
+    const lines = String(e.message || e).split('\n');
+    const msg = lines[0] + (lines.find((l) => /waiting for/.test(l)) ? ' — ' + lines.find((l) => /waiting for/.test(l)).trim() : '');
+    results.push(['FAIL', name, msg]);
+    console.log('  FAIL ', name, '\n       ', msg);
+  }
 }
 function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
 
@@ -31,6 +38,22 @@ const url = (r, q = '') => `${BASE}/index.php?r=${r}${q}`;
 await step('Unauthenticated pages redirect to login', async () => {
   await page.goto(url('products'));
   assert(page.url().includes('r=login'), page.url());
+});
+await step('Login page: logo area, show/hide password, no default credentials shown', async () => {
+  assert(await page.isVisible('.login-shell'), 'professional login layout');
+  await page.fill('#password', 'abc');
+  await page.click('[data-pw-toggle]');
+  assert((await page.getAttribute('#password', 'type')) === 'text', 'password shown');
+  assert((await page.getAttribute('[data-pw-toggle]', 'aria-pressed')) === 'true');
+  await page.click('[data-pw-toggle]');
+  assert((await page.getAttribute('#password', 'type')) === 'password', 'password hidden again');
+  const text = (await page.textContent('body')).toLowerCase();
+  assert(!/default (password|login)|admin\s*\/\s*admin|password:\s*\w/.test(text), 'no default credentials on the page');
+  assert(await page.getAttribute('#username', 'autocomplete') === 'username');
+  assert(await page.getAttribute('#password', 'autocomplete') === 'current-password');
+  await page.fill('#password', '');
+  await page.click('button[type=submit]');
+  assert(page.url().includes('r=login'), 'empty password is not submitted');
 });
 await step('Invalid login shows a generic error', async () => {
   await page.fill('#username', ADMIN_USER);
@@ -136,7 +159,7 @@ await step('POS: barcode scan (type + Enter) adds to cart; unknown barcode is re
   await page.waitForSelector('.c-line');
   await page.locator('#pos-search').pressSequentially('4801234567890', { delay: 5 });
   await page.keyboard.press('Enter');
-  await page.waitForFunction(() => document.querySelector('.c-line input')?.value === '2');
+  await page.waitForFunction(() => document.querySelector('.c-line .qty-value')?.textContent === '2');
   await page.locator('#pos-search').pressSequentially('0000000000000', { delay: 5 });
   await page.keyboard.press('Enter');
   await page.waitForSelector('.toast.is-error:not([hidden])');
@@ -196,18 +219,39 @@ await step('Stock deducted after the sale', async () => {
   await page.goto(url('products', '&q=MS-001'));
   assert((await page.textContent('tbody tr')).includes('22'));
 });
-await step('Sales history, detail and void with password', async () => {
+await step('Void approval PIN is set in My Account (separate from the password)', async () => {
+  await page.goto(url('account'));
+  await page.fill('#pin_current_password', NEW_PW);
+  await page.fill('#pin', '123456'); await page.fill('#pin2', '123456');
+  await page.click('form[action*="account.pin"] button[type=submit]');
+  assert(await page.isVisible('text=simple sequence'), 'sequential PIN refused');
+  await page.fill('#pin_current_password', NEW_PW);
+  await page.fill('#pin', VOID_PIN); await page.fill('#pin2', VOID_PIN);
+  await page.click('form[action*="account.pin"] button[type=submit]');
+  assert(await page.isVisible('text=Your void approval PIN is saved'));
+  assert(!(await page.content()).includes(VOID_PIN), 'PIN never shown again');
+});
+await step('Sales history, detail and void with supervisor approval', async () => {
   await page.goto(url('sales'));
   await page.screenshot({ path: `${SHOTS}/09-sales-history.png`, fullPage: true });
   await page.click(`a:has-text("#${txn}") >> nth=0`);
   await page.fill('#void-reason', 'Customer changed mind');
-  await page.fill('#void-password', 'wrong');
+  await page.fill('#void-approver', ADMIN_USER);
+  await page.fill('#void-pin', '000000');
   await page.click('button:has-text("Void sale")');
-  assert(await page.isVisible('text=Password is incorrect'));
+  assert(await page.isVisible('text=Approval failed'), 'wrong PIN refused');
+  assert(!(await page.isVisible('text=The sale was voided')));
   await page.fill('#void-reason', 'Customer changed mind');
-  await page.fill('#void-password', NEW_PW);
+  await page.fill('#void-approver', ADMIN_USER);
+  await page.fill('#void-pin', NEW_PW);
+  await page.click('button:has-text("Void sale")');
+  assert(await page.isVisible('text=Approval failed'), 'login password is not accepted as the void PIN');
+  await page.fill('#void-reason', 'Customer changed mind');
+  await page.fill('#void-approver', ADMIN_USER);
+  await page.fill('#void-pin', VOID_PIN);
   await page.click('button:has-text("Void sale")');
   assert(await page.isVisible('text=The sale was voided'));
+  assert((await page.textContent('main')).includes('approved by ' + ADMIN_USER), 'approver shown');
   assert(!(await page.isVisible('button:has-text("Void sale")')), 'cannot void twice');
   await page.screenshot({ path: `${SHOTS}/10-sale-voided.png`, fullPage: true });
 });
@@ -256,22 +300,278 @@ await step('Settings save and system check', async () => {
   await page.goto(url('settings.system'));
   await page.screenshot({ path: `${SHOTS}/14-system-check.png`, fullPage: true });
 });
-await step('No horizontal overflow on phone and tablet widths', async () => {
-  for (const [w, h] of [[375, 812], [768, 1024]]) {
-    await page.setViewportSize({ width: w, height: h });
-    for (const r of ['dashboard', 'pos', 'products', 'sales', 'reports', 'settings', 'products.create']) {
-      await page.goto(url(r));
-      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      assert(over <= 0, `${r} overflows by ${over}px at ${w}px`);
-    }
-  }
-  await page.setViewportSize({ width: 375, height: 812 });
+const display = () => page.textContent('[data-keypad-display]');
+const lineQty = () => page.textContent('.c-line .qty-value');
+await step('POS keypad: digits, backspace, clear, stock limit, cancel, physical keyboard', async () => {
   await page.goto(url('pos'));
   await page.waitForSelector('.p-card');
-  await page.screenshot({ path: `${SHOTS}/15-mobile-pos.png`, fullPage: true });
+  await page.click('.p-card button[aria-label^="Add Motul 5100"]');
+  await page.waitForSelector('.c-line');
+  await page.click('.c-line .qty-value');
+  await page.waitForSelector('#keypad-dialog[open]');
+  const stockText = await page.textContent('[data-keypad-stock]');
+  const avail = Number((stockText.match(/Available stock: (\d+)/) || [])[1]);
+  assert(avail === 24, 'shows available stock: ' + stockText); // 24 − 2 sold + 2 returned by the void
+  const tag = await page.evaluate(() => document.activeElement && document.activeElement.tagName);
+  assert(tag !== 'INPUT' && tag !== 'TEXTAREA', 'no text field focused, so the phone keyboard stays closed');
+  await page.screenshot({ path: `${SHOTS}/17-keypad.png` });
+  for (const k of ['1', '5']) await page.click(`[data-key="${k}"]`);
+  assert((await display()) === '15', 'multi-digit entry');
+  await page.click('[data-key="back"]');
+  assert((await display()) === '1', 'backspace');
+  await page.click('[data-key="clear"]');
+  for (const k of ['9', '9']) await page.click(`[data-key="${k}"]`);
+  await page.click('[data-keypad-confirm]');
+  assert(await page.isVisible('[data-keypad-error]:has-text("Only 24 in stock")'), 'over-stock refused');
+  assert(await page.isVisible('#keypad-dialog[open]'), 'dialog stays open');
+  assert((await lineQty()) === '1', 'cart unchanged until a valid Confirm');
+  await page.click('[data-key="clear"]');
+  await page.click('[data-key="0"]');
+  await page.click('[data-keypad-confirm]');
+  assert(await page.isVisible('[data-keypad-error]:has-text("1 or more")'), 'zero refused');
+  await page.click('[data-key="clear"]');
+  await page.click('[data-key="7"]');
+  await page.click('.modal-actions [data-keypad-cancel]');
+  assert((await lineQty()) === '1', 'cancel keeps the previous quantity');
+  await page.click('.c-line .qty-value');
+  await page.keyboard.type('12');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.type('0');
+  assert((await display()) === '10', 'physical keyboard digits and backspace');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => !document.querySelector('#keypad-dialog').open);
+  assert((await lineQty()) === '10', 'Enter confirms');
+  assert((await page.textContent('[data-total]')) === '₱4,500.00');
+  await page.click('.c-line .qty-value');
+  await page.keyboard.type('3');
+  await page.keyboard.press('Escape');
+  assert((await lineQty()) === '10', 'Escape cancels');
+});
+await step('POS: checkout is blocked and nothing is deducted when stock ran out meanwhile', async () => {
+  // Another cashier sells/adjusts stock while this cart is open.
+  const other = await ctx.newPage();
+  await other.goto(url('products', '&q=MS-001'));
+  await other.click('details.menu summary');
+  await other.click('text=Adjust stock');
+  await other.check('input[value=set]');
+  await other.fill('#quantity', '4');
+  await other.fill('#reason', 'Recount');
+  await other.click('main form.card button[type=submit]');
+  await other.close();
+  await page.click('[data-pay]');
+  await page.waitForSelector('#pay-dialog[open]');
+  await page.click('.quick-cash button:has-text("Exact")');
+  await page.click('[data-complete]');
+  await page.waitForSelector('[data-pay-error]:not([hidden])');
+  assert(/stock|available/i.test(await page.textContent('[data-pay-error]')), await page.textContent('[data-pay-error]'));
+  await page.click('#pay-dialog [data-close] >> nth=0');
+  const p2 = await ctx.newPage();
+  await p2.goto(url('products', '&q=MS-001'));
+  assert((await p2.textContent('tbody tr')).includes('4'), 'stock still 4');
+  await p2.close();
+  await page.click('[data-clear]');
+});
+await step('Sidebar collapses to an icon rail with tooltips and remembers the choice', async () => {
+  await page.goto(url('dashboard'));
+  await page.click('[data-rail-toggle]');
+  assert(await page.evaluate(() => document.body.classList.contains('sidebar-rail')), 'rail mode');
+  await page.waitForTimeout(400); // width transition
+  const titles = await page.$$eval('.sidebar .nav-link', (ls) => ls.map((l) => l.getAttribute('title') || l.getAttribute('aria-label')));
+  assert(titles.length > 3 && titles.every(Boolean), 'every rail icon has a tooltip/label');
+  const w = await page.evaluate(() => document.querySelector('.sidebar').getBoundingClientRect().width);
+  assert(w <= 96, 'rail width ' + w);
+  await page.screenshot({ path: `${SHOTS}/18-sidebar-rail.png` });
+  await page.reload();
+  assert(await page.evaluate(() => document.body.classList.contains('sidebar-rail')), 'remembered after reload');
+  await page.click('[data-rail-toggle]');
+  await page.reload();
+  assert(!(await page.evaluate(() => document.body.classList.contains('sidebar-rail'))), 'expanded again');
+});
+await step('Theme: live preview, saved, applied everywhere, reset', async () => {
+  await page.goto(url('settings.appearance'));
+  await page.fill('#theme_primary', '#1d4ed8');
+  const live = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  assert(live === '#1d4ed8', 'live preview ' + live);
+  await page.click('button:has-text("Save theme")');
+  await page.goto(url('dashboard'));
+  const saved = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
+  assert(saved === '#1d4ed8', 'persisted ' + saved);
+  await page.screenshot({ path: `${SHOTS}/19-theme-blue.png` });
+  await page.goto(url('settings.appearance'));
+  await page.click('button:has-text("Reset to default")');
+  await page.goto(url('dashboard'));
+  assert((await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim())) === '#dd4a2b');
+});
+await step('Receipt settings: paper size, auto-print toggle and test print', async () => {
+  await page.goto(url('settings.receipt'));
+  await page.selectOption('#receipt_paper', '58mm');
+  await page.check('#receipt_auto_print');
+  await page.click('main form button[type=submit]');
+  assert(await page.isChecked('#receipt_auto_print'));
+  const [popup] = await Promise.all([ctx.waitForEvent('page'), page.click('a:has-text("Test print")')]);
+  popup.on('dialog', (d) => d.dismiss());
+  await popup.waitForLoadState();
+  assert((await popup.textContent('body')).includes('TEST'), 'test receipt is marked as a test');
+  assert(await popup.evaluate(() => document.body.className.includes('paper-58')), 'paper size applied');
+  await popup.close();
+  // With auto-print on, a completed sale prints through a hidden frame and never blocks the sale.
+  await page.goto(url('pos'));
+  await page.waitForSelector('.p-card');
+  await page.click('.p-card button[aria-label^="Add Motul C2"]');
+  await page.click('[data-pay]');
+  await page.click('.quick-cash button:has-text("Exact")');
+  await page.click('[data-complete]');
+  await page.waitForSelector('#done-dialog[open]');
+  await page.waitForSelector('[data-print-holder] iframe');
+  assert((await page.getAttribute('[data-print-holder] iframe', 'src')).includes('embed=1'));
+  await page.click('[data-new-sale]');
+  await page.goto(url('settings.receipt'));
+  await page.uncheck('#receipt_auto_print');
+  await page.selectOption('#receipt_paper', '80mm');
+  await page.click('main form button[type=submit]');
+});
+await step('CSV import: template download, preview with errors, confirm, summary', async () => {
+  const fs = await import('fs');
+  await page.goto(url('products.import'));
+  const [tpl] = await Promise.all([page.waitForEvent('download'), page.click('a:has-text("with example")')]);
+  const tplText = fs.readFileSync(await tpl.path(), 'utf8');
+  assert(tplText.includes('EXAMPLE-SKU-001') && tplText.startsWith('﻿name,sku'), 'template with example row');
+  fs.writeFileSync(`${SHOTS}/import.csv`, tplText + 'Shell Advance AX7 1L,IMP-001,,Engine Oil,,300,395,12,,bottle\nBroken row,IMP-002,,,,abc,,1,,\nMotul 5100 4T 10W-40,MS-001,,Engine Oil,,350,999,500,,bottle\n');
+  await page.setInputFiles('#file', `${SHOTS}/import.csv`);
+  await page.click('button:has-text("Upload and preview")');
+  await page.waitForSelector('text=New products');
+  const strip = await page.textContent('.summary-grid');
+  assert(/New products\s*1/.test(strip) && /Skipped\s*2/.test(strip) && /errors\s*1/.test(strip), strip.replace(/\s+/g, ' '));
+  await page.screenshot({ path: `${SHOTS}/20-import-preview.png`, fullPage: true });
+  await page.click('button:has-text("Import 1 product")');
+  await page.waitForSelector('text=Import finished');
+  await page.goto(url('products', '&q=IMP-001'));
+  assert((await page.textContent('tbody')).includes('Shell Advance AX7'), 'imported');
+  await page.goto(url('products', '&q=MS-001'));
+  assert(!(await page.textContent('tbody')).includes('999'), 'existing price untouched in create mode');
+});
+await step('Users: create a cashier; the cashier sees only permitted pages', async () => {
+  await page.goto(url('users.create'));
+  await page.fill('#username', 'till1');
+  await page.fill('#full_name', 'Till One');
+  await page.selectOption('#role_id', { label: 'Cashier — Runs the POS and views sales and inventory.' });
+  await page.fill('#password', 'Counter#Till42');
+  await page.fill('#password2', 'Counter#Till42');
+  await page.click('main form button[type=submit]');
+  await page.waitForURL(/r=users$/);
+  assert((await page.textContent('main')).includes('till1'));
+  await page.screenshot({ path: `${SHOTS}/21-users.png`, fullPage: true });
+  const c2 = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const p = await c2.newPage();
+  await p.goto(url('login'));
+  await p.fill('#username', 'till1'); await p.fill('#password', 'Counter#Till42');
+  await p.click('button[type=submit]');
+  await p.waitForURL(/password\.change/);
+  await p.fill('#current_password', 'Counter#Till42');
+  await p.fill('#new_password', 'Register#Till77'); await p.fill('#confirm_password', 'Register#Till77');
+  await p.click('form[action*="password.change"] button[type=submit]');
+  await p.waitForLoadState();
+  const nav = await p.textContent('.sidebar nav');
+  assert(nav.includes('POS') && !nav.includes('Settings') && !nav.includes('Reports') && !nav.includes('Users'), 'nav: ' + nav.replace(/\s+/g, ' '));
+  await p.goto(url('pos'));
+  await p.waitForSelector('.p-card');
+  assert(!(await p.isVisible('[data-discount-toggle]')), 'no discount control without permission');
+  const r = await p.goto(url('settings'));
+  assert(r.status() === 403, 'settings refused: ' + r.status());
+  await c2.close();
+});
+await step('Email reports: settings and test email through SMTP', async () => {
+  const { spawn } = await import('child_process');
+  const fs = await import('fs');
+  const dir = fs.mkdtempSync('/tmp/moto-e2e-smtp-');
+  const port = 3525 + Math.floor(Math.random() * 300);
+  const sink = spawn('python3', [new URL('./smtp_sink.py', import.meta.url).pathname, String(port), `${dir}/mail`, '/nonexistent', '/nonexistent']);
+  await new Promise((res) => sink.stdout.once('data', res));
+  try {
+    await page.goto(url('settings.email'));
+    await page.fill('#email_recipients', 'owner@shop.test');
+    await page.selectOption('#mail_transport', 'smtp');
+    await page.fill('#smtp_host', '127.0.0.1');
+    await page.fill('#smtp_port', String(port));
+    await page.selectOption('#smtp_encryption', 'none');
+    await page.fill('#mail_from_address', 'reports@shop.test');
+    await page.click('form[action*="settings.email"] button:has-text("Save")');
+    assert(await page.isVisible('text=saved'), 'saved');
+    await page.click('button:has-text("Send test email")');
+    assert(await page.isVisible('text=Test email sent'), await page.textContent('main .alert'));
+    const files = fs.readdirSync(`${dir}/mail`).filter((f) => f.endsWith('.eml'));
+    assert(files.length === 1, 'one email delivered');
+    const eml = fs.readFileSync(`${dir}/mail/${files[0]}`, 'utf8');
+    const subj = (eml.match(/^Subject: (.*)$/m) || [])[1] || '';
+    const decoded = subj.replace(/=\?UTF-8\?B\?([^?]+)\?=/g, (_, b) => Buffer.from(b, 'base64').toString('utf8'));
+    assert(decoded.startsWith('[TEST]'), 'marked as test: ' + decoded);
+    await page.screenshot({ path: `${SHOTS}/22-email-settings.png`, fullPage: true });
+  } finally {
+    sink.kill();
+  }
+});
+await step('Audit log lists sensitive actions without secrets', async () => {
+  await page.goto(url('audit'));
+  const text = await page.textContent('main');
+  for (const a of ['sale.void', 'user.create', 'user.void_pin.set', 'login']) assert(text.includes(a), 'audit shows ' + a);
+  assert(!text.includes(VOID_PIN) && !text.includes(NEW_PW), 'no secrets');
+  await page.screenshot({ path: `${SHOTS}/23-audit.png`, fullPage: true });
+});
+await step('Responsive: no horizontal overflow on phones, tablets (portrait/landscape) and desktops', async () => {
+  const sizes = [[360, 740], [390, 844], [768, 1024], [1024, 768], [820, 1180], [1180, 820], [1280, 800], [1440, 900]];
+  const routes = ['dashboard', 'pos', 'products', 'products.create', 'products.import', 'inventory.integrity', 'sales', 'reports',
+    'users', 'users.create', 'account', 'settings', 'settings.receipt', 'settings.email', 'settings.appearance', 'settings.system', 'audit', 'updates'];
+  for (const [w, h] of sizes) {
+    await page.setViewportSize({ width: w, height: h });
+    for (const r of routes) {
+      await page.goto(url(r));
+      const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert(over <= 0, `${r} overflows by ${over}px at ${w}x${h}`);
+    }
+  }
+});
+await step('POS on tablets and phones: total and Pay always visible; cart sheet; keypad fits', async () => {
+  for (const [w, h, name] of [[1024, 768, 'tablet-landscape'], [768, 1024, 'tablet-portrait'], [390, 844, 'phone']]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto(url('pos'));
+    await page.waitForSelector('.p-card');
+    await page.click('.p-card button[aria-label^="Add NGK"]');
+    const inView = async (sel) => page.evaluate((s) => {
+      const el = [...document.querySelectorAll(s)].find((e) => e.offsetParent !== null);
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth;
+    }, sel);
+    if (w >= 900) {
+      assert(await inView('[data-pay]'), `Pay visible at ${name}`);
+      assert(await inView('[data-total]'), `total visible at ${name}`);
+    } else {
+      assert(await inView('[data-pay-bar]'), `Pay bar visible at ${name}`);
+      assert(await inView('[data-bar-total]'), `total visible at ${name}`);
+      await page.click('[data-cart-open]');
+      await page.waitForSelector('.pos-cart.is-open');
+      await page.waitForTimeout(350); // slide-in animation
+      assert(await inView('.pos-cart [data-pay]'), `Pay inside the cart sheet visible at ${name}`);
+      assert(await inView('.pos-cart [data-total]'), `total inside the cart sheet visible at ${name}`);
+    }
+    await page.screenshot({ path: `${SHOTS}/24-pos-${name}.png` });
+    await page.click('.c-line .qty-value');
+    await page.waitForSelector('#keypad-dialog[open]');
+    const fits = await page.evaluate(() => { const r = document.querySelector('#keypad-dialog').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.right <= innerWidth; });
+    assert(fits, `keypad fits the screen at ${name}`);
+    const keyH = await page.evaluate(() => document.querySelector('[data-key="5"]').getBoundingClientRect().height);
+    assert(keyH >= 44, `keys are touch-sized (${keyH}px) at ${name}`);
+    await page.screenshot({ path: `${SHOTS}/25-keypad-${name}.png` });
+    await page.keyboard.press('Escape');
+    if (w < 900) await page.click('[data-cart-close]');
+    await page.click('[data-clear]', { force: true }).catch(() => {});
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(url('dashboard'));
   await page.click('[data-open-sidebar]');
   await page.screenshot({ path: `${SHOTS}/16-mobile-nav.png` });
+  await page.goto(url('sales'));
+  await page.screenshot({ path: `${SHOTS}/26-mobile-sales-cards.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 await step('Logout destroys the session', async () => {
