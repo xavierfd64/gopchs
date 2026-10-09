@@ -81,7 +81,7 @@ final class Requirements
 
     public const DENY_ALL = "# Deny all direct web access to this directory.\n<IfModule mod_authz_core.c>\n  Require all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n</IfModule>\n";
 
-    public const UPLOADS_HTACCESS = "# Uploaded product images only. Nothing in this folder may be executed.\n<IfModule mod_authz_core.c>\n  Require all denied\n  <FilesMatch \"\\.(jpe?g|png|gif|webp)$\">\n    Require all granted\n  </FilesMatch>\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n  <FilesMatch \"\\.(jpe?g|png|gif|webp)$\">\n    Order deny,allow\n    Allow from all\n  </FilesMatch>\n</IfModule>\n<IfModule mod_mime.c>\n  RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .pl .py .cgi .shtml\n  RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar\n</IfModule>\n<IfModule mod_headers.c>\n  Header always set X-Content-Type-Options \"nosniff\"\n  Header always set Content-Security-Policy \"default-src 'none'; img-src 'self'\"\n</IfModule>\n";
+    public const UPLOADS_HTACCESS = "# Uploaded product images and shop branding (logo, favicon) only. Nothing in this folder may be executed.\n<IfModule mod_authz_core.c>\n  Require all denied\n  <FilesMatch \"\\.(jpe?g|png|gif|webp|ico)$\">\n    Require all granted\n  </FilesMatch>\n</IfModule>\n<IfModule !mod_authz_core.c>\n  Order allow,deny\n  Deny from all\n  <FilesMatch \"\\.(jpe?g|png|gif|webp|ico)$\">\n    Order deny,allow\n    Allow from all\n  </FilesMatch>\n</IfModule>\n<IfModule mod_mime.c>\n  RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar .pl .py .cgi .shtml\n  RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar\n</IfModule>\n<IfModule mod_headers.c>\n  Header always set X-Content-Type-Options \"nosniff\"\n  Header always set Content-Security-Policy \"default-src 'none'; img-src 'self'\"\n</IfModule>\n";
 
     /**
      * Prove that PHP can create, write and delete a file in $dir. Uses a random file name
@@ -270,6 +270,21 @@ final class Requirements
         $c[] = function_exists('password_hash') && function_exists('random_bytes')
             ? self::row('Password hashing & secure random', 'Available', self::OK)
             : self::row('Password hashing & secure random', 'Not available', self::FAIL, 'Needed to store passwords safely.', 'Ask your host for a standard PHP 8 build.');
+        $c[] = class_exists(\ZipArchive::class)
+            ? self::row('zip extension (updates and backups)', 'Available', self::OK)
+            : self::row('zip extension (updates and backups)', 'Not available', self::WARN,
+                'Needed for the in-app updater and file backups. Without it, install updates by uploading the files by hand (README "Updating").',
+                'Enable the "zip" extension in your hosting control panel, or ask your host.');
+        $c[] = function_exists('sodium_crypto_sign_verify_detached')
+            ? self::row('sodium extension (update signatures)', 'Available', self::OK)
+            : self::row('sodium extension (update signatures)', 'Not available', self::WARN,
+                'Needed to verify that update packages are genuine. Without it, the in-app updater is disabled; manual updates still work.',
+                'Enable the "sodium" extension in your hosting control panel, or ask your host.');
+        $c[] = function_exists('sodium_crypto_secretbox') || function_exists('openssl_encrypt')
+            ? self::row('Encryption (stored SMTP password)', 'Available', self::OK)
+            : self::row('Encryption (stored SMTP password)', 'Not available', self::WARN,
+                'The SMTP password for email reports cannot be stored encrypted, so SMTP sign-in is disabled. Everything else works.',
+                'Enable the "sodium" or "openssl" extension, or ask your host.');
         $c[] = session_status() === PHP_SESSION_ACTIVE
             ? self::row('PHP sessions', 'Working', self::OK)
             : self::row('PHP sessions', 'Not working', self::FAIL, 'Sessions keep you logged in.', 'Allow cookies for this site in your browser, then click Recheck Requirements. If it persists, ask your host to enable PHP sessions.');
@@ -308,6 +323,19 @@ final class Requirements
                 . '(owner: read, write, execute). If 755 does not work, try 775. Never use 777. '
                 . ($r['exists'] ? '' : 'If the folder is missing, create it first with "New Folder". ')
                 . 'Then click Recheck Requirements.');
+        }
+
+        if (!$installing) {
+            try {
+                $bad = \App\Core\DB::nonTransactionalTables();
+                $c[] = $bad === []
+                    ? self::row('Database tables (InnoDB, transactions)', 'All tables support transactions', self::OK)
+                    : self::row('Database tables (InnoDB, transactions)', 'Not transactional: ' . implode(', ', array_slice($bad, 0, 6)), self::FAIL,
+                        'Without transactions a failed sale can leave partial records, so sales and stock changes are paused.',
+                        'In phpMyAdmin, open each listed table → Operations → Storage Engine → InnoDB → Go. Then open Products → Integrity check.');
+            } catch (\Throwable) {
+                // Database unavailable: reported elsewhere.
+            }
         }
 
         $c[] = self::httpsRow();

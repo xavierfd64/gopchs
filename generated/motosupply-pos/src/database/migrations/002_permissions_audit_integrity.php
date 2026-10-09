@@ -184,4 +184,19 @@ return static function (PDO $pdo): void {
             PRIMARY KEY (id)
         ) $opts");
     }
+
+    // 10. Integrity findings a person reviewed and closed without changing records
+    //     (for example a sale recorded without a stock deduction whose goods WERE handed over).
+    if (!$tableExists('integrity_reviews')) {
+        $pdo->exec("CREATE TABLE integrity_reviews (
+            id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            kind       VARCHAR(20)  NOT NULL,
+            ref_id     INT UNSIGNED NOT NULL,
+            note       VARCHAR(255) NOT NULL,
+            user_id    INT UNSIGNED NULL,
+            created_at DATETIME     NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uq_integrity_reviews (kind, ref_id)
+        ) $opts");
+    }
 };

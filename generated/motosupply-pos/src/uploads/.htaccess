@@ -1,14 +1,14 @@
-# Uploaded product images only. Nothing in this folder may be executed.
+# Uploaded product images and shop branding (logo, favicon) only. Nothing in this folder may be executed.
 <IfModule mod_authz_core.c>
   Require all denied
-  <FilesMatch "\.(jpe?g|png|gif|webp)$">
+  <FilesMatch "\.(jpe?g|png|gif|webp|ico)$">
     Require all granted
   </FilesMatch>
 </IfModule>
 <IfModule !mod_authz_core.c>
   Order allow,deny
   Deny from all
-  <FilesMatch "\.(jpe?g|png|gif|webp)$">
+  <FilesMatch "\.(jpe?g|png|gif|webp|ico)$">
     Order deny,allow
     Allow from all
   </FilesMatch>

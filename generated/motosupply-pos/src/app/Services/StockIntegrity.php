@@ -9,12 +9,16 @@ use App\Core\DB;
  * Read-only audit of inventory consistency. Nothing here changes data; corrections are made
  * through audited actions (stock count adjustment, approved void) chosen by a person.
  *
+ * Open issues (each can be resolved by an audited correction):
  *  - negative:  products whose stock is below zero (impossible with the 1.3 database guard)
- *  - ledger:    products whose stock differs from the sum of their stock movements
- *  - chain:     movements whose "after" does not equal "before + change"
+ *  - ledger:    products whose stock differs from the "after" quantity of their latest stock
+ *               movement (stock was changed without being recorded); resolved by a physical count
  *  - phantom:   completed sales with a line that has no matching stock deduction (left behind
- *               by a failed sale on non-transactional tables)
+ *               by a failed sale on non-transactional tables); resolved by an approved void or by
+ *               marking the record reviewed
+ * History, shown for review only (records are never rewritten):
  *  - oversold:  past sale movements that took stock below zero
+ *  - chain:     movements whose "after" does not equal "before + change"
  */
 final class StockIntegrity
 {
@@ -22,11 +26,10 @@ final class StockIntegrity
     {
         $negative = DB::all('SELECT id, sku, name, stock_qty FROM products WHERE stock_qty < 0 ORDER BY name');
         $ledger = DB::all(
-            'SELECT p.id, p.sku, p.name, p.stock_qty, COALESCE(m.total, 0) AS ledger_qty, COALESCE(m.cnt, 0) AS movements
+            'SELECT p.id, p.sku, p.name, p.stock_qty, COALESCE(last.qty_after, 0) AS ledger_qty, last.created_at AS last_movement
                FROM products p
-               LEFT JOIN (SELECT product_id, SUM(qty_change) AS total, COUNT(*) AS cnt FROM stock_movements GROUP BY product_id) m
-                      ON m.product_id = p.id
-              WHERE CAST(p.stock_qty AS SIGNED) <> CAST(COALESCE(m.total, 0) AS SIGNED)
+               LEFT JOIN stock_movements last ON last.id = (SELECT MAX(m.id) FROM stock_movements m WHERE m.product_id = p.id)
+              WHERE CAST(p.stock_qty AS SIGNED) <> CAST(COALESCE(last.qty_after, 0) AS SIGNED)
               ORDER BY p.name LIMIT 500'
         );
         $chain = DB::all(
@@ -38,6 +41,7 @@ final class StockIntegrity
             "SELECT s.id, s.transaction_no, s.created_at, s.total, si.product_id, si.product_name, si.quantity
                FROM sales s JOIN sale_items si ON si.sale_id = s.id
               WHERE s.status = 'completed'
+                AND NOT EXISTS (SELECT 1 FROM integrity_reviews r WHERE r.kind = 'phantom' AND r.ref_id = s.id)
                 AND NOT EXISTS (SELECT 1 FROM stock_movements m
                                  WHERE m.sale_id = s.id AND m.product_id = si.product_id AND m.movement_type = 'sale')
               ORDER BY s.id LIMIT 500"
@@ -55,8 +59,26 @@ final class StockIntegrity
             'oversold' => $oversold,
             'guard' => self::guardEnabled(),
             'non_transactional' => DB::nonTransactionalTables(),
-            'issues' => count($negative) + count($ledger) + count($chain) + count($phantom) + count($oversold),
+            'issues' => count($negative) + count($ledger) + count($phantom),
+            'history' => count($chain) + count($oversold),
         ];
+    }
+
+    /**
+     * Close a "sale without stock deduction" finding when the goods WERE handed over: the sale
+     * stays as it is (the product count is corrected separately). Recorded with the reviewer's note.
+     */
+    public static function markReviewed(string $kind, int $refId, string $note, int $userId): void
+    {
+        $note = trim($note);
+        if ($kind !== 'phantom' || $note === '' || mb_strlen($note) > 255) {
+            throw new \App\Core\ValidationException(['note' => 'Enter a note explaining the review (up to 255 characters).']);
+        }
+        if (DB::value("SELECT id FROM sales WHERE id = ? AND status = 'completed'", [$refId]) === null) {
+            throw new \App\Core\ValidationException(['sale' => 'Sale not found or already voided.']);
+        }
+        DB::run('INSERT IGNORE INTO integrity_reviews (kind, ref_id, note, user_id, created_at) VALUES (?, ?, ?, ?, ?)',
+            [$kind, $refId, $note, $userId, \App\Core\Clock::nowUtc()]);
     }
 
     /** True when the database itself rejects negative stock (stock_qty is UNSIGNED). */

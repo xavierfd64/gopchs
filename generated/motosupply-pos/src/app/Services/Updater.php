@@ -276,9 +276,10 @@ final class Updater
         $fileCount = Backup::files(self::BACKUP_PATHS, $backupDir . '/files.zip');
         $log[] = "Backup created: database dump and $fileCount application files.";
         $now = Clock::nowUtc();
+        $addedFiles = array_values(array_filter(array_keys($m['files']), static fn ($p) => !is_file(MOTO_ROOT . '/' . $p)));
         $historyId = DB::insert(
             'INSERT INTO update_history (from_version, to_version, status, backup_dir, details, user_id, created_at, updated_at) VALUES (?, ?, \'started\', ?, ?, ?, ?, ?)',
-            [MOTO_VERSION, $m['version'], basename($backupDir), json_encode(['files' => $info['files']]), $userId, $now, $now]
+            [MOTO_VERSION, $m['version'], basename($backupDir), json_encode(['files' => $info['files'], 'added' => $addedFiles]), $userId, $now, $now]
         );
 
         $flag = MOTO_ROOT . '/storage/maintenance.flag';
@@ -343,7 +344,7 @@ final class Updater
                 throw new \RuntimeException('Post-update check failed: database migrations are still pending.');
             }
             $log[] = 'Post-update checks passed.';
-            DB::run("UPDATE update_history SET status = 'success', details = ?, updated_at = ? WHERE id = ?", [json_encode(['log' => $log]), Clock::nowUtc(), $historyId]);
+            DB::run("UPDATE update_history SET status = 'success', details = ?, updated_at = ? WHERE id = ?", [json_encode(['log' => $log, 'added' => $addedFiles]), Clock::nowUtc(), $historyId]);
             return ['ok' => true, 'log' => $log, 'history_id' => $historyId, 'version' => $m['version']];
         } catch (\Throwable $e) {
             Logger::error('Update to ' . $m['version'] . ' failed', $e);
@@ -351,6 +352,7 @@ final class Updater
             if ($installed) {
                 try {
                     self::restoreFiles($backupDir . '/files.zip');
+                    self::removeFiles($addedFiles);
                     $log[] = 'The previous application files were restored automatically from the backup.';
                 } catch (\Throwable $re) {
                     Logger::error('Automatic file restore failed', $re);
@@ -360,7 +362,7 @@ final class Updater
             } else {
                 $log[] = 'No application files were changed.';
             }
-            DB::run("UPDATE update_history SET status = 'failed', details = ?, updated_at = ? WHERE id = ?", [json_encode(['log' => $log]), Clock::nowUtc(), $historyId]);
+            DB::run("UPDATE update_history SET status = 'failed', details = ?, updated_at = ? WHERE id = ?", [json_encode(['log' => $log, 'added' => $addedFiles]), Clock::nowUtc(), $historyId]);
             return ['ok' => false, 'log' => $log, 'history_id' => $historyId, 'version' => $m['version']];
         } finally {
             @unlink($flag);
@@ -403,7 +405,11 @@ final class Updater
         return $n;
     }
 
-    /** Roll back the files of a past update (database left as is; migrations are additive). */
+    /**
+     * Roll back the files of a past update: restore the backed-up files and delete files the
+     * update added. The database is left as is (migrations only add tables/columns, which the
+     * previous version ignores); the database dump in the backup folder is there if needed.
+     */
     public static function rollback(int $historyId): array
     {
         $h = DB::one('SELECT * FROM update_history WHERE id = ?', [$historyId]);
@@ -412,8 +418,23 @@ final class Updater
         }
         $dir = Backup::dir() . '/' . basename((string) $h['backup_dir']);
         $n = self::restoreFiles($dir . '/files.zip');
+        $details = json_decode((string) $h['details'], true);
+        self::removeFiles(is_array($details['added'] ?? null) ? $details['added'] : []);
         DB::run("UPDATE update_history SET status = 'rolled_back', updated_at = ? WHERE id = ?", [Clock::nowUtc(), $historyId]);
         return ['files' => $n, 'version' => $h['from_version']];
+    }
+
+    /** Delete files an update added (only paths an update may write; used when undoing it). */
+    private static function removeFiles(array $paths): void
+    {
+        foreach ($paths as $p) {
+            if (is_string($p) && self::allowedTarget($p) && is_file(MOTO_ROOT . '/' . $p)) {
+                @unlink(MOTO_ROOT . '/' . $p);
+            }
+        }
+        if (function_exists('opcache_reset')) {
+            @opcache_reset();
+        }
     }
 
     public static function history(): array

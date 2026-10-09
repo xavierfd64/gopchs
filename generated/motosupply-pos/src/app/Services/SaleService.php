@@ -235,17 +235,19 @@ final class SaleService
      * Void a completed sale. The original sale and its lines are kept and marked voided; stock is
      * restored and the reversal is recorded, all in one transaction. A sale can be voided once.
      *
-     * $restoreStock = false is used only by the integrity correction for sales whose stock was
-     * never deducted (records left by a failed sale on non-transactional tables).
+     * The quantity returned to stock is what the stock ledger shows was actually deducted for the
+     * sale, not what the sale lines say. For normal sales the two are equal; for damaged records
+     * left by a failed sale on non-transactional tables (a line whose stock was never deducted)
+     * this avoids adding stock that never left the shelf.
      */
-    public static function void(int $saleId, string $reason, int $requesterId, int $approverId, bool $restoreStock = true): void
+    public static function void(int $saleId, string $reason, int $requesterId, int $approverId): void
     {
         self::assertTransactional();
         $reason = trim($reason);
         if ($reason === '' || mb_strlen($reason) > 255) {
             throw new ValidationException(['reason' => 'Enter the reason for voiding (up to 255 characters).']);
         }
-        DB::transaction(static function () use ($saleId, $reason, $requesterId, $approverId, $restoreStock): void {
+        DB::transaction(static function () use ($saleId, $reason, $requesterId, $approverId): void {
             $sale = DB::one('SELECT id, status FROM sales WHERE id = ? FOR UPDATE', [$saleId]);
             if ($sale === null) {
                 throw new ValidationException(['sale' => 'Sale not found.']);
@@ -254,19 +256,24 @@ final class SaleService
                 throw new ValidationException(['sale' => 'This sale has already been voided.']);
             }
             $now = Clock::nowUtc();
-            if ($restoreStock) {
-                $items = DB::all('SELECT product_id, SUM(quantity) AS quantity FROM sale_items WHERE sale_id = ? GROUP BY product_id ORDER BY product_id', [$saleId]);
-                foreach ($items as $it) {
-                    $p = DB::one('SELECT stock_qty FROM products WHERE id = ? FOR UPDATE', [$it['product_id']]);
-                    $before = (int) $p['stock_qty'];
-                    $qty = (int) $it['quantity'];
-                    DB::run('UPDATE products SET stock_qty = stock_qty + ?, updated_at = ? WHERE id = ?', [$qty, $now, $it['product_id']]);
-                    DB::run(
-                        'INSERT INTO stock_movements (product_id, user_id, movement_type, qty_before, qty_change, qty_after, reason, sale_id, created_at)
-                         VALUES (?, ?, \'void\', ?, ?, ?, ?, ?, ?)',
-                        [$it['product_id'], $requesterId, $before, $qty, $before + $qty, 'Void: ' . mb_substr($reason, 0, 240), $saleId, $now]
-                    );
+            $deducted = DB::all(
+                "SELECT product_id, -SUM(qty_change) AS quantity FROM stock_movements
+                  WHERE sale_id = ? AND movement_type = 'sale' GROUP BY product_id ORDER BY product_id",
+                [$saleId]
+            );
+            foreach ($deducted as $it) {
+                $qty = (int) $it['quantity'];
+                if ($qty <= 0) {
+                    continue;
                 }
+                $p = DB::one('SELECT stock_qty FROM products WHERE id = ? FOR UPDATE', [$it['product_id']]);
+                $before = (int) $p['stock_qty'];
+                DB::run('UPDATE products SET stock_qty = stock_qty + ?, updated_at = ? WHERE id = ?', [$qty, $now, $it['product_id']]);
+                DB::run(
+                    'INSERT INTO stock_movements (product_id, user_id, movement_type, qty_before, qty_change, qty_after, reason, sale_id, created_at)
+                     VALUES (?, ?, \'void\', ?, ?, ?, ?, ?, ?)',
+                    [$it['product_id'], $requesterId, $before, $qty, $before + $qty, 'Void: ' . mb_substr($reason, 0, 240), $saleId, $now]
+                );
             }
             $updated = DB::run(
                 'UPDATE sales SET status = \'voided\', void_reason = ?, voided_by = ?, void_approved_by = ?, voided_at = ? WHERE id = ? AND status = \'completed\'',

@@ -8,8 +8,8 @@ DirectoryIndex index.php
   RedirectMatch 404 ^/(.*/)?(app|config|database|storage)(/.*)?$
 </IfModule>
 
-# Never serve dotfiles, SQL dumps, logs, lock files, docs or backups.
-<FilesMatch "(^\.|\.(sql|log|lock|md|ini|sh|bak|old|orig|dist|tmp|swp|zip|tar|gz)$)">
+# Never serve dotfiles, SQL dumps, logs, lock files, docs, backups or update-package metadata.
+<FilesMatch "(^\.|\.(sql|log|lock|md|ini|sh|bak|old|orig|dist|tmp|swp|zip|tar|gz|json|sig)$)">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>

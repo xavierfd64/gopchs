@@ -11,6 +11,8 @@ use Throwable;
 final class DB
 {
     private static ?PDO $pdo = null;
+    /** @var list<string>|null cached result of nonTransactionalTables() for this request */
+    private static ?array $nonTransactional = null;
 
     public static function connect(array $cfg): PDO
     {
@@ -47,6 +49,7 @@ final class DB
     public static function setPdo(?PDO $pdo): void
     {
         self::$pdo = $pdo;
+        self::$nonTransactional = null;
     }
 
     public static function run(string $sql, array $params = []): \PDOStatement
@@ -111,16 +114,15 @@ final class DB
      */
     public static function nonTransactionalTables(): array
     {
-        static $cache = null;
-        if ($cache === null) {
-            $cache = array_map('strval', self::pdo()->query(
+        if (self::$nonTransactional === null) {
+            self::$nonTransactional = array_map('strval', self::pdo()->query(
                 "SELECT table_name FROM information_schema.tables
                   WHERE table_schema = DATABASE()
                     AND table_name IN ('users','settings','categories','products','sales','sale_items','stock_movements')
                     AND engine <> 'InnoDB'"
             )->fetchAll(\PDO::FETCH_COLUMN));
         }
-        return $cache;
+        return self::$nonTransactional;
     }
 
     public static function isDuplicateKey(Throwable $e, ?string $keyName = null): bool

@@ -255,7 +255,7 @@ final class SettingsController extends Controller
             Http::flash(str_starts_with($r, 'failed') ? 'error' : 'success', match ($r) {
                 'sent' => "Report for $date sent.",
                 'already-sent' => "The report for $date was already sent; it is not sent twice.",
-                'busy' => "The report for $date is being sent or has reached its retry limit.",
+                'busy' => "The report for $date is being sent right now. Check again in a few minutes.",
                 default => 'Report failed: ' . substr($r, 8),
             });
         }

@@ -696,3 +696,6 @@ code.break, .break { word-break: break-all; }
   .settings-tabs a span { font-size: 12px; }
   .inline-form { width: 100%; }
 }
+
+.change-list { margin: 0; padding-left: 1rem; }
+.change-list li { margin: 0 0 2px; }

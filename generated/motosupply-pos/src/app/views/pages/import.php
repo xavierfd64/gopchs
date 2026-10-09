@@ -58,13 +58,13 @@
       <div><span class="stat-label">Rows with errors</span><strong class="<?= $c['error'] ? 'text-danger' : '' ?>"><?= $c['error'] ?></strong></div>
     </div>
     <div class="table-wrap"><table class="table table-cards">
-      <thead><tr><th scope="col">Line</th><th scope="col">Action</th><th scope="col">SKU</th><th scope="col">Name</th><th scope="col" class="num">Price</th><th scope="col" class="num">Stock</th><th scope="col">Problems</th></tr></thead>
+      <thead><tr><th scope="col">Line</th><th scope="col">Action</th><th scope="col">SKU</th><th scope="col">Name</th><th scope="col" class="num">Price</th><th scope="col" class="num">Stock</th><th scope="col">Changes / problems</th></tr></thead>
       <tbody><?php foreach (array_slice($analysis['rows'], 0, 200) as $r): ?>
         <tr><td data-label="Line"><?= (int) $r['line'] ?></td>
           <td data-label="Action"><span class="pill <?= ['create' => 'pill-success', 'update' => 'pill-warning', 'skip' => 'pill-muted', 'error' => 'pill-danger'][$r['action']] ?>"><?= e(ucfirst($r['action'])) ?></span></td>
           <td data-label="SKU"><?= e($r['input']['sku'] ?? '') ?></td><td data-label="Name"><?= e($r['input']['name'] ?? '') ?></td>
           <td data-label="Price" class="num"><?= e($r['input']['selling_price'] ?? '') ?></td><td data-label="Stock" class="num"><?= $r['action'] === 'update' ? '<span class="muted">unchanged</span>' : e($r['input']['stock_qty'] ?? '0') ?></td>
-          <td data-label="Problems" class="small"><?= e(implode('; ', $r['errors'])) ?></td></tr>
+          <td data-label="Changes / problems" class="small"><?php if ($r['action'] === 'update'): ?><ul class="change-list"><?php foreach ($r['changes'] as $f => [$old, $new]): ?><li><strong><?= e(\App\Services\ProductImport::COLUMNS[$f] ?? $f) ?>:</strong> <span class="muted"><?= e($old === '' ? '(blank)' : $old) ?></span> → <?= e($new === '' ? '(blank)' : $new) ?></li><?php endforeach; ?></ul><?php else: ?><?= e(implode('; ', $r['errors'])) ?><?php endif; ?></td></tr>
       <?php endforeach; ?></tbody></table></div>
     <?php if (count($analysis['rows']) > 200): ?><p class="small muted">Showing the first 200 of <?= count($analysis['rows']) ?> rows; the counts above include all rows.</p><?php endif; ?>
   </section>

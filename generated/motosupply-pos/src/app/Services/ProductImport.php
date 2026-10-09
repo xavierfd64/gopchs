@@ -17,7 +17,9 @@ use App\Core\ValidationException;
  * Modes:
  *   create  — create new products only; rows whose SKU already exists are skipped.
  *   update  — also update existing products (matched by SKU): name, barcode, category,
- *             description, unit, prices, threshold. STOCK OF EXISTING PRODUCTS IS NEVER CHANGED
+ *             description, unit, prices, threshold. Columns missing from the file keep their
+ *             current values; the preview lists every change (old → new) and rows that would
+ *             change nothing are skipped. STOCK OF EXISTING PRODUCTS IS NEVER CHANGED
  *             by an import (use Adjust stock); stock_qty is the opening stock of NEW products.
  *
  * The whole import runs in one database transaction: either every valid row is written or none.
@@ -176,16 +178,29 @@ final class ProductImport
         $out = [];
         $counts = ['create' => 0, 'update' => 0, 'skip' => 0, 'error' => 0];
         foreach ($rows as $r) {
-            $res = ['line' => $r['_line'], 'input' => $r, 'action' => 'error', 'errors' => [], 'data' => null, 'id' => null];
+            $res = ['line' => $r['_line'], 'input' => $r, 'action' => 'error', 'errors' => [], 'data' => null, 'id' => null, 'changes' => []];
             $sku = strtoupper((string) ($r['sku'] ?? ''));
             if (str_starts_with($sku, 'EXAMPLE-')) {
                 $res['action'] = 'skip';
                 $res['errors'][] = 'Template example row';
             } else {
-                $existing = $sku !== '' ? DB::one('SELECT id, barcode FROM products WHERE sku = ?', [$sku]) : null;
+                $existingId = $sku !== '' ? DB::value('SELECT id FROM products WHERE sku = ?', [$sku]) : null;
+                $existing = $existingId !== null ? ProductService::find((int) $existingId) : null;
+                $input = $r;
+                if ($existing !== null) {
+                    // Columns that are not in the file keep the product's current values.
+                    foreach (self::currentValues($existing) as $k => $v) {
+                        if (!array_key_exists($k, $input)) {
+                            $input[$k] = $v;
+                        }
+                    }
+                }
                 try {
-                    $data = ProductService::validate($r + ['stock_qty' => '0'], $existing === null);
+                    $data = ProductService::validate($input + ['stock_qty' => '0'], $existing === null);
                     $res['data'] = $data;
+                    if ($existing !== null) {
+                        $res['changes'] = self::changes($existing, $data);
+                    }
                 } catch (ValidationException $e) {
                     $res['errors'] = array_values($e->errors);
                 }
@@ -209,6 +224,9 @@ final class ProductImport
                 if ($res['errors'] === []) {
                     if ($existing === null) {
                         $res['action'] = 'create';
+                    } elseif ($mode === 'update' && ($res['changes'] ?? []) === []) {
+                        $res['action'] = 'skip';
+                        $res['errors'][] = 'No changes';
                     } elseif ($mode === 'update') {
                         $res['action'] = 'update';
                         $res['id'] = (int) $existing['id'];
@@ -222,6 +240,46 @@ final class ProductImport
             $out[] = $res;
         }
         return ['rows' => $out, 'counts' => $counts];
+    }
+
+    /** An existing product's editable values in import-column form. */
+    private static function currentValues(array $p): array
+    {
+        return [
+            'name' => (string) $p['name'],
+            'barcode' => (string) ($p['barcode'] ?? ''),
+            'category' => (string) ($p['category_name'] ?? ''),
+            'description' => (string) ($p['description'] ?? ''),
+            'cost_price' => (string) $p['cost_price'],
+            'selling_price' => (string) $p['selling_price'],
+            'low_stock_threshold' => $p['low_stock_threshold'] === null ? '' : (string) $p['low_stock_threshold'],
+            'unit' => (string) $p['unit'],
+        ];
+    }
+
+    /**
+     * Fields an update would change, as [field => [old, new]] (shown in the preview).
+     * @return array<string, array{0:string,1:string}>
+     */
+    private static function changes(array $p, array $d): array
+    {
+        $cur = self::currentValues($p);
+        $new = [
+            'name' => $d['name'], 'barcode' => (string) ($d['barcode'] ?? ''), 'category' => $d['category'],
+            'description' => (string) ($d['description'] ?? ''), 'cost_price' => $d['cost_price'], 'selling_price' => $d['selling_price'],
+            'low_stock_threshold' => $d['low_stock_threshold'] === null ? '' : (string) $d['low_stock_threshold'], 'unit' => $d['unit'],
+        ];
+        $out = [];
+        foreach ($new as $k => $v) {
+            $old = $cur[$k];
+            $same = in_array($k, ['cost_price', 'selling_price'], true)
+                ? \App\Core\Money::parse($old) === \App\Core\Money::parse((string) $v)
+                : (string) $old === (string) $v;
+            if (!$same) {
+                $out[$k] = [(string) $old, (string) $v];
+            }
+        }
+        return $out;
     }
 
     /**

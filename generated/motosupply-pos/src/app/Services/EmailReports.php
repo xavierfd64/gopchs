@@ -22,6 +22,8 @@ use DateTimeZone;
  *  - Gross sales = sum of line totals of completed sales; Net sales = gross − discounts.
  *    Voided sales are excluded from both and listed separately. Rejected sales are never saved.
  *  - Profit is not included (it is not "sales"); see the in-app Reports for gross profit.
+ *  - Low/out-of-stock lists show stock at the time the report is generated (stock is not
+ *    stored per day), which is stated in the email.
  *  - One delivery record per report date (unique key) prevents duplicate emails.
  */
 final class EmailReports
@@ -87,7 +89,7 @@ final class EmailReports
                     $pdo->exec('COMMIT');
                 }
             }
-            return compact('date', 'sum', 'low', 'out', 'top', 'transactions', 'salesReport') + ['timezone' => self::timezone()];
+            return compact('date', 'sum', 'low', 'out', 'top', 'transactions', 'salesReport') + ['timezone' => self::timezone(), 'generated_at' => Clock::nowUtc()];
         });
     }
 
@@ -138,7 +140,8 @@ final class EmailReports
         if (in_array('top_products', $sections, true)) {
             $table('Top products sold', array_map(static fn ($p) => [$p['sku'], $p['name'], $p['qty'] . ' sold', Money::format(Money::toCents((string) $p['sales']))], $r['top']));
         }
-        $note = 'Net sales = gross sales − discounts; voided sales are excluded. Figures are revenue, not profit.';
+        $note = 'Net sales = gross sales − discounts; voided sales are excluded. Figures are revenue, not profit. '
+            . 'Stock lists show stock when this report was generated (' . Clock::toLocal($r['generated_at'] ?? Clock::nowUtc()) . '), not at the end of the day.';
         $html .= '<p style="color:#777;font-size:12px;margin-top:18px">' . e($note) . '</p></div>';
         $lines[] = '';
         $lines[] = $note;
@@ -165,7 +168,7 @@ final class EmailReports
 
     /**
      * Send the report that is due now, exactly once per report date.
-     * Returns a short status: disabled | not-due | already-sent | busy | sent | failed: …
+     * Returns a short status: disabled | not-due | already-sent | busy | gave-up: … | sent | failed: …
      */
     public static function runScheduled(string $trigger, ?string $forceDate = null): string
     {
@@ -182,7 +185,11 @@ final class EmailReports
         }
         if (!self::claim($date, $trigger, $recipients)) {
             $st = (string) DB::value('SELECT status FROM email_report_runs WHERE report_date = ?', [$date]);
-            return $st === 'sent' ? 'already-sent' : 'busy';
+            return match ($st) {
+                'sent' => 'already-sent',
+                'failed' => 'gave-up: ' . self::MAX_ATTEMPTS . ' attempts failed for ' . $date,
+                default => 'busy',
+            };
         }
         try {
             $msg = self::compose(self::build($date));
@@ -201,7 +208,8 @@ final class EmailReports
 
     /**
      * Atomically take responsibility for sending $date. A row that is 'sent' is never resent; a
-     * 'failed' row is retried up to MAX_ATTEMPTS times; a 'sending' row older than 15 minutes
+     * 'failed' row is retried automatically up to MAX_ATTEMPTS times (manual sends may always
+     * retry a failed date); a 'sending' row older than 15 minutes
      * (crashed request) may be retried.
      */
     private static function claim(string $date, string $trigger, array $recipients): bool
@@ -224,7 +232,8 @@ final class EmailReports
         return DB::run(
             "UPDATE email_report_runs SET status = 'sending', attempts = attempts + 1, recipients = ?, trigger_src = ?, updated_at = ?
               WHERE report_date = ? AND attempts < ? AND (status = 'failed' OR (status = 'sending' AND updated_at < ?))",
-            [$rcpt, $trigger, $now, $date, self::MAX_ATTEMPTS, $stale]
+            // A person pressing "Send now" may retry a failed date beyond the automatic limit.
+            [$rcpt, $trigger, $now, $date, $trigger === 'manual' ? PHP_INT_MAX : self::MAX_ATTEMPTS, $stale]
         )->rowCount() === 1;
     }
 

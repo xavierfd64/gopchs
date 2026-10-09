@@ -105,6 +105,9 @@ final class Mailer
                 self::cmd($fp, "EHLO $ehloHost", [250]);
             }
             if ($user !== '') {
+                if ($enc === 'none' && !in_array(strtolower($host), ['localhost', '127.0.0.1'], true)) {
+                    throw new \RuntimeException('Refusing to send the SMTP password over an unencrypted connection. Choose TLS (port 587) or SSL (port 465).');
+                }
                 self::cmd($fp, 'AUTH LOGIN', [334]);
                 self::cmd($fp, base64_encode($user), [334], true);
                 self::cmd($fp, base64_encode($pass), [235], true);

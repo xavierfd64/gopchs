@@ -21,6 +21,7 @@ final class SchemaUpdater
         if (Migrator::pending() === []) {
             return;
         }
+        @mkdir(MOTO_ROOT . '/storage', 0755, true);
         $lock = @fopen(MOTO_ROOT . '/storage/migrate.lock', 'c');
         if ($lock === false || !flock($lock, LOCK_EX | LOCK_NB)) {
             self::busy();
@@ -29,11 +30,20 @@ final class SchemaUpdater
             if (Migrator::pending() === []) {
                 return; // another request finished it
             }
-            $backup = '';
+            @set_time_limit(300);
             try {
                 $backup = basename(Backup::database('before-migration'));
             } catch (\Throwable $e) {
-                Logger::error('Pre-migration backup failed (continuing; migrations are additive)', $e);
+                // Never change the database without a backup.
+                Logger::error('Pre-migration backup failed; database update postponed', $e);
+                http_response_code(503);
+                View::render('pages/error', [
+                    'title' => 'Database update needed',
+                    'message' => 'MotoSupply must back up the database before updating it, and the backup could not be written. '
+                        . 'Nothing was changed. Make the storage/ folder writable (Settings → System Check explains how, or set the '
+                        . 'folder permission to 755 in your hosting File Manager), then reload this page.',
+                ], 'layout/guest');
+                exit;
             }
             try {
                 $ran = (new Migrator(DB::pdo()))->migrate();
@@ -44,12 +54,12 @@ final class SchemaUpdater
                     'title' => 'Database update needed',
                     'message' => 'MotoSupply could not finish updating its database. No business records were deleted. '
                         . 'Ask the administrator to check storage/logs/ and the backup in storage/backups/'
-                        . ($backup !== '' ? ' (' . $backup . ')' : '') . '. Reloading this page retries the update safely.',
+                        . ' (' . $backup . '). Reloading this page retries the update safely.',
                 ], 'layout/guest');
                 exit;
             }
             Settings::reset();
-            Logger::info('Database migrations applied: ' . implode(', ', $ran) . ($backup !== '' ? " (backup $backup)" : ''));
+            Logger::info('Database migrations applied: ' . implode(', ', $ran) . " (backup $backup)");
             Audit::log('system.migrate', 'schema', (string) max($ran ?: [0]), ['versions' => $ran, 'backup' => $backup], 'success', ['id' => null, 'username' => 'system']);
         } finally {
             if ($lock !== false) {
