@@ -1,0 +1,19 @@
+﻿"MotoSupply Shop"
+"Sales summary (Daily)"
+"Oct 9, 2026"
+"Generated 2026-10-09 17:20:29 PST"
+
+Period,Transactions,"Gross sales (PHP)","Discounts (PHP)","Net sales (PHP)","Cost of goods (PHP)","Gross profit (PHP)",Voids
+"Fri, Oct 9, 2026",1,1850.00,0.00,1850.00,1420.00,430.00,1
+
+Summary
+Transactions,1
+"Items sold",1
+"Gross sales (PHP)",1850.00
+"Discounts (PHP)",0.00
+"Net sales (revenue) (PHP)",1850.00
+"Cost of goods sold (PHP)",1420.00
+"Gross profit (PHP)",430.00
+"Voided transactions",1
+"Voided amount (excluded) (PHP)",1420.00
+"Net sales = gross sales − discounts. Gross profit = net sales − cost of goods (cost captured at time of sale). Voided sales are excluded."

@@ -1,0 +1,31 @@
+/* Printable receipt: fits standard paper and also narrow (58/80 mm) printers via the browser. */
+* { box-sizing: border-box; }
+body { margin: 0; background: #f3f2ee; color: #111; font: 13px/1.4 "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+.receipt-actions { display: flex; gap: 10px; justify-content: center; padding: 16px; flex-wrap: wrap; }
+.receipt-actions button, .receipt-actions a { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 4px; border: 1px solid #ccc; background: #fff; color: #111; text-decoration: none; cursor: pointer; }
+.receipt-actions button { background: #dd4a2b; border-color: #dd4a2b; color: #fff; }
+.receipt-actions :focus-visible { outline: 2px solid #2f6fed; outline-offset: 2px; }
+.receipt { width: min(360px, calc(100vw - 32px)); margin: 0 auto 32px; background: #fff; padding: 22px 20px; border: 1px solid #e3e0d9; }
+header { text-align: center; border-bottom: 1px dashed #999; padding-bottom: 10px; }
+h1 { font-size: 17px; margin: 0 0 4px; }
+header p { margin: 2px 0; font-size: 12px; }
+.void-banner { text-align: center; font-weight: 800; letter-spacing: .1em; margin: 10px 0 0; }
+dl { margin: 10px 0; }
+dl div { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+dt { color: #444; }
+dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; border-top: 1px dashed #999; border-bottom: 1px dashed #999; }
+th { font-size: 11px; text-align: left; padding: 6px 0; border-bottom: 1px solid #ddd; }
+td { padding: 5px 0; vertical-align: top; font-size: 12px; }
+td small { display: block; color: #666; font-size: 10px; }
+.num { text-align: right; white-space: nowrap; padding-left: 6px; font-variant-numeric: tabular-nums; }
+.totals .grand { border-top: 1px solid #111; margin-top: 4px; padding-top: 6px; font-size: 16px; }
+.totals .grand dt { color: #111; font-weight: 800; }
+.items-count { text-align: center; font-size: 11px; color: #555; margin: 6px 0 0; }
+footer { text-align: center; border-top: 1px dashed #999; margin-top: 10px; padding-top: 10px; font-size: 12px; }
+@media print {
+  @page { margin: 8mm; }
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .receipt { border: 0; margin: 0 auto; padding: 0; width: 100%; max-width: 80mm; }
+}

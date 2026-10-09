@@ -1,0 +1,7 @@
+src/config/config.php
+src/storage/installed.lock
+src/storage/install.lock.tmp
+src/storage/logs/*.log
+src/storage/sessions/
+src/uploads/products/*
+!src/uploads/products/index.html

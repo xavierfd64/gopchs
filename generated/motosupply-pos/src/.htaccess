@@ -1,0 +1,33 @@
+# MotoSupply POS — Apache rules for shared hosting (InfinityFree / cPanel).
+# Only directives that are safe without special server permissions are used.
+
+DirectoryIndex index.php
+
+# Block private application directories even if their own .htaccess is ignored.
+<IfModule mod_alias.c>
+  RedirectMatch 404 ^/(.*/)?(app|config|database|storage)(/.*)?$
+</IfModule>
+
+# Never serve dotfiles, SQL dumps, logs, lock files, docs or backups.
+<FilesMatch "(^\.|\.(sql|log|lock|md|ini|sh|bak|old|orig|dist|tmp|swp|zip|tar|gz)$)">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "same-origin"
+</IfModule>
+
+# Optional: force HTTPS once SSL is active on your domain. Uncomment the four lines below
+# (requires mod_rewrite), or set 'force_https' => true in config/config.php instead.
+# <IfModule mod_rewrite.c>
+#   RewriteEngine On
+#   RewriteCond %{HTTPS} !=on
+#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# </IfModule>
