@@ -6,7 +6,9 @@ namespace App\Controllers;
 use App\Core\Auth;
 use App\Core\Clock;
 use App\Core\Http;
+use App\Core\Audit;
 use App\Core\ValidationException;
+use App\Services\VoidAuthorization;
 use App\Services\SaleService;
 
 final class SalesController extends Controller
@@ -53,19 +55,24 @@ final class SalesController extends Controller
         unset($_SESSION['_void_error']);
     }
 
-    /** Voiding requires the administrator to re-enter their password and give a reason. */
+    /**
+     * Void = signed-in user with sales.void + a reason + approval by a user holding
+     * sales.void.approve who enters their own void PIN (not a login password).
+     */
     public function void(): void
     {
         $id = $this->idParam('id', 'post');
-        $password = is_string($_POST['password'] ?? null) ? $_POST['password'] : '';
-        if (!Auth::verifyCurrentPassword($password)) {
-            $_SESSION['_void_error'] = 'Password is incorrect. The sale was not voided.';
-            Http::redirect(url('sales.view', ['id' => $id]));
-        }
+        $reason = Http::post('reason');
         try {
-            SaleService::void($id, Http::post('reason'), Auth::id());
+            if (trim($reason) === '') {
+                throw new ValidationException(['reason' => 'Enter the reason for voiding.']);
+            }
+            $approver = VoidAuthorization::verify(Http::post('approver'), (string) ($_POST['pin'] ?? ''), Http::clientIp());
+            SaleService::void($id, $reason, Auth::id(), (int) $approver['id']);
+            Audit::log('sale.void', 'sale', $id, ['reason' => $reason, 'approver' => $approver['username']]);
             Http::flash('success', 'The sale was voided and its stock was returned to inventory.');
         } catch (ValidationException $e) {
+            Audit::log('sale.void', 'sale', $id, ['reason' => $reason, 'approver' => Http::post('approver'), 'error' => $e->getMessage()], 'failure');
             $_SESSION['_void_error'] = $e->getMessage();
         }
         Http::redirect(url('sales.view', ['id' => $id]));

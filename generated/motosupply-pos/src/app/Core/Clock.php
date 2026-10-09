@@ -11,9 +11,23 @@ final class Clock
 {
     public const DB_FORMAT = 'Y-m-d H:i:s';
 
+    /** Temporary timezone override (used to build email reports in their configured timezone). */
+    private static ?string $override = null;
+
+    public static function withTimezone(string $tz, callable $fn): mixed
+    {
+        $prev = self::$override;
+        self::$override = $tz;
+        try {
+            return $fn();
+        } finally {
+            self::$override = $prev;
+        }
+    }
+
     public static function tz(): DateTimeZone
     {
-        $name = Settings::get('timezone', 'Asia/Manila');
+        $name = self::$override ?? Settings::get('timezone', 'Asia/Manila');
         try {
             return new DateTimeZone($name);
         } catch (\Exception) {

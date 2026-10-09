@@ -1,6 +1,7 @@
 <?php
 use App\Services\ProductService;
 $exportBase = ['type' => 'inventory'];
+$can = static fn (string $p): bool => \App\Core\Auth::can($p);
 ?>
 <div class="page">
   <div class="page-head">
@@ -9,9 +10,12 @@ $exportBase = ['type' => 'inventory'];
       <p class="muted">Manage products, pricing, and stock levels.</p>
     </div>
     <div class="btn-row">
-      <a class="btn" href="<?= e(url('reports', $exportBase)) ?>"><?= icon('reports') ?> Inventory Report</a>
-      <a class="btn" href="<?= e(url('reports.export', $exportBase + ['format' => 'csv'])) ?>"><?= icon('download') ?> Export CSV</a>
-      <a class="btn btn-primary" href="<?= e(url('products.create')) ?>"><?= icon('plus') ?> Add Product</a>
+      <?php if ($can('reports.view')): ?><a class="btn" href="<?= e(url('reports', $exportBase)) ?>"><?= icon('reports') ?> Inventory Report</a><?php endif; ?>
+      <?php if ($can('inventory.movements')): ?><a class="btn" href="<?= e(url('inventory.integrity')) ?>"><?= icon('shield') ?> Integrity check</a><?php endif; ?>
+      <?php if ($can('products.import')): ?><a class="btn" href="<?= e(url('products.import')) ?>"><?= icon('upload') ?> Import CSV</a>
+        <a class="btn" href="<?= e(url('products.import.template', ['example' => 1])) ?>"><?= icon('download') ?> CSV Template</a><?php endif; ?>
+      <?php if ($can('reports.export')): ?><a class="btn" href="<?= e(url('reports.export', $exportBase + ['format' => 'csv'])) ?>"><?= icon('download') ?> Export CSV</a><?php endif; ?>
+      <?php if ($can('products.manage')): ?><a class="btn btn-primary" href="<?= e(url('products.create')) ?>"><?= icon('plus') ?> Add Product</a><?php endif; ?>
     </div>
   </div>
 
@@ -74,7 +78,7 @@ $exportBase = ['type' => 'inventory'];
       </div>
     <?php else: ?>
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead><tr>
             <th scope="col">Product</th><th scope="col">SKU / Barcode</th><th scope="col">Category</th>
             <th scope="col" class="num">Cost</th><th scope="col" class="num">Price</th><th scope="col" class="num">Stock</th>
@@ -90,7 +94,7 @@ $exportBase = ['type' => 'inventory'];
                   <?php else: ?>
                     <span class="thumb <?= tint($p['name']) ?>" aria-hidden="true"><?= e(initials($p['name'])) ?></span>
                   <?php endif; ?>
-                  <span><a class="strong" href="<?= e(url('products.edit', ['id' => $p['id']])) ?>"><?= e($p['name']) ?></a><small class="muted"><?= e($p['unit']) ?></small></span>
+                  <span><?php if ($can('products.manage')): ?><a class="strong" href="<?= e(url('products.edit', ['id' => $p['id']])) ?>"><?= e($p['name']) ?></a><?php else: ?><strong><?= e($p['name']) ?></strong><?php endif; ?><small class="muted"><?= e($p['unit']) ?></small></span>
                 </div>
               </td>
               <td><strong><?= e($p['sku']) ?></strong><small class="muted block"><?= e($p['barcode'] ?? '') ?></small></td>
@@ -109,10 +113,11 @@ $exportBase = ['type' => 'inventory'];
                 <details class="menu">
                   <summary class="icon-btn" aria-label="Actions for <?= e($p['name']) ?>"><?= icon('more') ?></summary>
                   <div class="menu-list">
-                    <a href="<?= e(url('products.edit', ['id' => $p['id']])) ?>"><?= icon('edit') ?> Edit</a>
-                    <a href="<?= e(url('products.adjust', ['id' => $p['id']])) ?>"><?= icon('adjust') ?> Adjust stock</a>
-                    <a href="<?= e(url('products.movements', ['id' => $p['id']])) ?>"><?= icon('history') ?> Stock history</a>
-                    <?php if ((int) $p['is_active'] === 1): ?>
+                    <?php if ($can('products.manage')): ?><a href="<?= e(url('products.edit', ['id' => $p['id']])) ?>"><?= icon('edit') ?> Edit</a><?php endif; ?>
+                    <?php if ($can('inventory.adjust')): ?><a href="<?= e(url('products.adjust', ['id' => $p['id']])) ?>"><?= icon('adjust') ?> Adjust stock</a><?php endif; ?>
+                    <?php if ($can('inventory.movements')): ?><a href="<?= e(url('products.movements', ['id' => $p['id']])) ?>"><?= icon('history') ?> Stock history</a><?php endif; ?>
+                    <?php if (!$can('products.manage')): ?>
+                    <?php elseif ((int) $p['is_active'] === 1): ?>
                       <form method="post" action="<?= e(url('products.archive')) ?>" data-confirm="Archive “<?= e($p['name']) ?>”? It will no longer be available in the POS.">
                         <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int) $p['id'] ?>">
                         <button type="submit"><?= icon('archive') ?> Archive</button>

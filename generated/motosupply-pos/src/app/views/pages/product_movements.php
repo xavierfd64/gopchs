@@ -12,7 +12,7 @@
       <div class="empty-state"><?= icon('history', 'icon-lg') ?><p>No stock movements recorded for this product yet.</p></div>
     <?php else: ?>
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead><tr><th scope="col">Date &amp; time</th><th scope="col">Type</th><th scope="col" class="num">Before</th><th scope="col" class="num">Change</th><th scope="col" class="num">After</th><th scope="col">Reason / reference</th><th scope="col">User</th></tr></thead>
           <tbody>
           <?php foreach ($list['rows'] as $m): ?>

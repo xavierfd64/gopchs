@@ -69,4 +69,75 @@
       var s = d.querySelector('summary'); if (s) s.focus();
     });
   });
+
+  // Desktop sidebar: collapse to an icon rail; remembered in a cookie (a display preference only).
+  var railBtn = document.querySelector('[data-rail-toggle]');
+  if (railBtn) {
+    railBtn.addEventListener('click', function () {
+      var rail = !document.body.classList.contains('sidebar-rail');
+      document.body.classList.toggle('sidebar-rail', rail);
+      railBtn.setAttribute('aria-pressed', rail ? 'true' : 'false');
+      var label = rail ? 'Expand sidebar' : 'Collapse sidebar';
+      railBtn.setAttribute('aria-label', label);
+      railBtn.title = label;
+      document.cookie = 'moto_sidebar=' + (rail ? 'rail' : 'full') + '; path=/; max-age=31536000; SameSite=Lax';
+    });
+  }
+
+  // Show/hide password fields.
+  document.querySelectorAll('[data-pw-toggle]').forEach(function (btn) {
+    var input = document.getElementById(btn.getAttribute('data-pw-toggle'));
+    if (!input) return;
+    btn.addEventListener('click', function () {
+      var show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      var use = btn.querySelector('use');
+      if (use) use.setAttribute('href', show ? '#i-eye-off' : '#i-eye');
+      input.focus();
+    });
+  });
+
+  // Login: friendly client-side check for empty fields (the server validates again).
+  var loginForm = document.querySelector('[data-validate-login]');
+  if (loginForm) {
+    loginForm.addEventListener('submit', function (e) {
+      var bad = false;
+      ['username', 'password'].forEach(function (name) {
+        var input = loginForm.querySelector('[name=' + name + ']');
+        var msg = loginForm.querySelector('[data-error-for=' + name + ']');
+        var empty = input.value.trim() === '';
+        msg.hidden = !empty;
+        input.setAttribute('aria-invalid', empty ? 'true' : 'false');
+        if (empty && !bad) { input.focus(); bad = true; }
+      });
+      if (bad) { e.preventDefault(); e.stopImmediatePropagation(); loginForm.removeAttribute('data-submitted'); }
+    }, true);
+  }
+
+  // Phones: tables marked .table-cards become cards; label each cell with its column title.
+  document.querySelectorAll('table.table-cards').forEach(function (table) {
+    var heads = Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) { return th.textContent.trim(); });
+    table.querySelectorAll('tbody tr').forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (td, i) {
+        if (!td.hasAttribute('data-label') && heads[i]) td.setAttribute('data-label', heads[i]);
+      });
+    });
+  });
+
+  // User form: show which permissions the selected role already includes.
+  var roleSelect = document.querySelector('[data-role-select]');
+  if (roleSelect) {
+    var showRole = function () {
+      var opt = roleSelect.options[roleSelect.selectedIndex];
+      var perms = (opt && opt.getAttribute('data-perms') || '').split(',');
+      document.querySelectorAll('[data-role-has]').forEach(function (el) {
+        var has = perms.indexOf(el.getAttribute('data-role-has')) !== -1;
+        el.textContent = has ? '✓ role' : '';
+      });
+    };
+    roleSelect.addEventListener('change', showRole);
+    showRole();
+  }
 })();

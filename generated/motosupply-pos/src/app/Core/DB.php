@@ -30,7 +30,9 @@ final class DB
         ]);
         // Store and compare all timestamps in UTC.
         $pdo->exec("SET time_zone = '+00:00'");
-        $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO'");
+        // NO_ENGINE_SUBSTITUTION: never silently create MyISAM tables when InnoDB is requested;
+        // MyISAM ignores transactions, which can leave half-recorded sales behind.
+        $pdo->exec("SET SESSION sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
         return $pdo;
     }
 
@@ -86,6 +88,10 @@ final class DB
     public static function transaction(callable $fn): mixed
     {
         $pdo = self::pdo();
+        if ($pdo->inTransaction()) {
+            // Nested call: join the outer transaction; the outermost caller commits or rolls back.
+            return $fn();
+        }
         $pdo->beginTransaction();
         try {
             $result = $fn();
@@ -97,6 +103,24 @@ final class DB
             }
             throw $e;
         }
+    }
+
+    /**
+     * Tables of this application that do NOT use a transactional engine (should be none).
+     * @return list<string>
+     */
+    public static function nonTransactionalTables(): array
+    {
+        static $cache = null;
+        if ($cache === null) {
+            $cache = array_map('strval', self::pdo()->query(
+                "SELECT table_name FROM information_schema.tables
+                  WHERE table_schema = DATABASE()
+                    AND table_name IN ('users','settings','categories','products','sales','sale_items','stock_movements')
+                    AND engine <> 'InnoDB'"
+            )->fetchAll(\PDO::FETCH_COLUMN));
+        }
+        return $cache;
     }
 
     public static function isDuplicateKey(Throwable $e, ?string $keyName = null): bool

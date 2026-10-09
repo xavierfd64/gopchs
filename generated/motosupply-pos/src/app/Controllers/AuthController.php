@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\Http;
 
@@ -22,6 +23,8 @@ final class AuthController extends Controller
                 $error = 'Enter your username and password.';
             } else {
                 $result = Auth::attempt($username, $password, Http::clientIp());
+                Audit::log('auth.login', 'user', mb_substr($username, 0, 50), $result === 'ok' ? [] : ['result' => $result], $result === 'ok' ? 'success' : 'failure',
+                    $result === 'ok' ? Auth::user() : ['id' => null, 'username' => mb_substr($username, 0, 50)]);
                 if ($result === 'ok') {
                     Http::redirect(url((int) Auth::user()['must_change_password'] === 1 ? 'password.change' : 'dashboard'));
                 }
@@ -38,11 +41,13 @@ final class AuthController extends Controller
             'error' => $error,
             'username' => $username,
             'expired' => $expired,
+            'loginPage' => true,
         ], 'layout/guest');
     }
 
     public function logout(): void
     {
+        Audit::log('auth.logout', 'user', Auth::id());
         Auth::logout();
         Http::redirect(url('login'));
     }
@@ -65,6 +70,7 @@ final class AuthController extends Controller
             }
             if ($error === null) {
                 Auth::changePassword((int) $user['id'], $new);
+                Audit::log('user.password.change', 'user', (int) $user['id'], ['forced' => (int) $user['must_change_password'] === 1]);
                 Http::flash('success', 'Your password has been changed.');
                 Http::redirect(url('dashboard'));
             }

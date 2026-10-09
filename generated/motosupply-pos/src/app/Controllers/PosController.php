@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\DB;
 use App\Core\Http;
@@ -30,6 +31,8 @@ final class PosController extends Controller
             'categories' => $categories,
             'autoAdd' => Settings::get('pos_auto_add_barcode') === '1',
             'confirmClear' => Settings::get('pos_confirm_clear') === '1',
+            'autoPrint' => Settings::get('receipt_auto_print') === '1',
+            'canDiscount' => Auth::can('pos.discount'),
             'scripts' => ['js/pos.js'],
         ]);
     }
@@ -65,22 +68,31 @@ final class PosController extends Controller
     public function checkout(): void
     {
         $body = Http::jsonBody();
+        $discountType = is_string($body['discount_type'] ?? null) ? $body['discount_type'] : 'none';
+        if ($discountType !== 'none' && !Auth::can('pos.discount')) {
+            Audit::log('sale.discount.denied', 'sale', '', ['discount_type' => $discountType], 'failure');
+            Http::json(['ok' => false, 'error' => 'You do not have permission to apply discounts.'], 403);
+        }
         try {
             $result = SaleService::checkout(
                 is_array($body['items'] ?? null) ? $body['items'] : [],
-                is_string($body['discount_type'] ?? null) ? $body['discount_type'] : 'none',
+                $discountType,
                 is_string($body['discount_value'] ?? null) ? $body['discount_value'] : '0',
                 is_string($body['tendered'] ?? null) ? $body['tendered'] : '',
                 is_string($body['client_token'] ?? null) ? $body['client_token'] : '',
                 Auth::id()
             );
         } catch (ValidationException $e) {
+            Audit::log('sale.rejected', 'sale', '', ['error' => $e->getMessage()], 'failure');
             Http::json(['ok' => false, 'error' => $e->getMessage(), 'errors' => $e->errors], 422);
         } catch (\Throwable $e) {
             Logger::error('Checkout failed', $e);
             Http::json(['ok' => false, 'error' => 'The sale could not be completed. Nothing was charged or deducted. Please try again.'], 500);
         }
         $sale = $result['sale'];
+        if (!$result['duplicate']) {
+            Audit::log('sale.completed', 'sale', (int) $sale['id'], ['transaction_no' => $sale['transaction_no'], 'total' => $sale['total']]);
+        }
         Http::json([
             'ok' => true,
             'duplicate' => $result['duplicate'],
@@ -98,13 +110,39 @@ final class PosController extends Controller
     public function receipt(): void
     {
         $sale = SaleService::find($this->idParam());
-        if ($sale === null) {
+        // Cashiers without sales history access may print only receipts of their own sales.
+        if ($sale === null || (!Auth::can('sales.view') && (int) $sale['user_id'] !== Auth::id())) {
             $this->notFound('sale');
         }
         $this->view('pages/receipt', [
             'title' => 'Receipt ' . $sale['transaction_no'],
             'sale' => $sale,
             'autoprint' => Http::query('print') === '1',
+            'embed' => Http::query('embed') === '1',
+            'paper' => Settings::get('receipt_paper', '80mm'),
+        ], 'layout/print');
+    }
+
+    /** Sample receipt for checking the printer and paper size; no sale is created. */
+    public function testReceipt(): void
+    {
+        $now = \App\Core\Clock::nowUtc();
+        $sale = [
+            'id' => 0, 'transaction_no' => 'TEST-PRINT', 'created_at' => $now, 'cashier' => Auth::user()['username'],
+            'status' => 'completed', 'subtotal' => '1250.00', 'discount_amount' => '0.00', 'total' => '1250.00',
+            'amount_tendered' => '1500.00', 'change_due' => '250.00', 'item_count' => 2,
+            'items' => [
+                ['product_name' => 'Sample item (test print)', 'sku' => 'TEST-1', 'quantity' => 1, 'unit_price' => '450.00', 'line_total' => '450.00'],
+                ['product_name' => 'Another sample item', 'sku' => 'TEST-2', 'quantity' => 1, 'unit_price' => '800.00', 'line_total' => '800.00'],
+            ],
+        ];
+        $this->view('pages/receipt', [
+            'title' => 'Test receipt',
+            'sale' => $sale,
+            'test' => true,
+            'autoprint' => Http::query('print') === '1',
+            'embed' => false,
+            'paper' => Http::query('paper') !== '' ? Http::query('paper') : Settings::get('receipt_paper', '80mm'),
         ], 'layout/print');
     }
 }

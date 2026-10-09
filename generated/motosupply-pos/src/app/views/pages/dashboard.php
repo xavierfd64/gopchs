@@ -127,7 +127,7 @@ $range = $d['range'];
       <div class="empty-state compact"><?= icon('receipt', 'icon-lg') ?><p>No transactions yet. Completed sales from the POS will appear here.</p></div>
     <?php else: ?>
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead><tr><th scope="col">Transaction</th><th scope="col">Date &amp; time</th><th scope="col" class="num">Items</th><th scope="col" class="num">Total</th><th scope="col">Payment</th><th scope="col">Status</th></tr></thead>
           <tbody>
           <?php foreach ($d['recent'] as $s): ?>

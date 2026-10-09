@@ -2,19 +2,25 @@
 use App\Core\Settings;
 $isVoid = $sale['status'] === 'voided';
 ?>
+<?php if (empty($embed)): ?>
 <div class="receipt-actions no-print">
   <button type="button" data-print>Print receipt</button>
-  <a href="<?= e(url('sales.view', ['id' => $sale['id']])) ?>">View sale</a>
-  <a href="<?= e(url('pos')) ?>">Back to POS</a>
+  <?php if (empty($test) && \App\Core\Auth::can('sales.view')): ?><a href="<?= e(url('sales.view', ['id' => $sale['id']])) ?>">View sale</a><?php endif; ?>
+  <?php if (\App\Core\Auth::can('pos.access')): ?><a href="<?= e(url('pos')) ?>">Back to POS</a><?php endif; ?>
 </div>
+<?php endif; ?>
+<?php if (!empty($test)): ?><p class="test-banner no-print">Test print: no sale was recorded. Paper: <?= e($paper) ?></p><?php endif; ?>
 <article class="receipt">
   <header>
+    <?php $logo = Settings::get('receipt_show_logo') === '1' ? \App\Services\Branding::logoUrl() : null; ?>
+    <?php if ($logo): ?><img class="receipt-logo" src="<?= e($logo) ?>" alt=""><?php endif; ?>
     <h1><?= e(Settings::get('shop_name')) ?></h1>
     <?php if (Settings::get('shop_address') !== ''): ?><p><?= e(Settings::get('shop_address')) ?></p><?php endif; ?>
     <?php $contact = array_filter([Settings::get('shop_phone'), Settings::get('shop_email')]); ?>
     <?php if ($contact): ?><p><?= e(implode(' · ', $contact)) ?></p><?php endif; ?>
   </header>
   <?php if ($isVoid): ?><p class="void-banner">*** VOIDED ***</p><?php endif; ?>
+  <?php if (!empty($test)): ?><p class="void-banner">*** TEST PRINT ***</p><?php endif; ?>
   <dl class="meta">
     <div><dt>Transaction</dt><dd><?= e($sale['transaction_no']) ?></dd></div>
     <div><dt>Date</dt><dd><?= e(local_time($sale['created_at'], 'M j, Y g:i A')) ?></dd></div>

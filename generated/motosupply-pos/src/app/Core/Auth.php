@@ -73,15 +73,73 @@ final class Auth
     public static function user(): ?array
     {
         if (self::$user === null && isset($_SESSION['user_id'])) {
-            self::$user = DB::one(
-                'SELECT id, username, full_name, role, must_change_password FROM users WHERE id = ? AND is_active = 1',
-                [(int) $_SESSION['user_id']]
-            );
+            self::$user = self::load((int) $_SESSION['user_id']);
             if (self::$user === null) {
-                unset($_SESSION['user_id']);
+                unset($_SESSION['user_id']); // deactivated or deleted: end the session
             }
         }
         return self::$user;
+    }
+
+    /** Active user with role and effective permissions, or null. */
+    public static function load(int $id): ?array
+    {
+        $u = DB::one(
+            'SELECT u.id, u.username, u.full_name, u.role_id, u.must_change_password, u.void_pin_hash IS NOT NULL AS has_void_pin,
+                    r.slug AS role_slug, r.name AS role_name
+               FROM users u LEFT JOIN roles r ON r.id = u.role_id
+              WHERE u.id = ? AND u.is_active = 1',
+            [$id]
+        );
+        if ($u === null) {
+            return null;
+        }
+        $u['permissions'] = self::effectivePermissions((int) $u['id'], $u['role_id'] === null ? null : (int) $u['role_id'], (string) $u['role_slug']);
+        return $u;
+    }
+
+    /** Role permissions plus per-user overrides. Administrators always hold every permission. */
+    public static function effectivePermissions(int $userId, ?int $roleId, string $roleSlug): array
+    {
+        if ($roleSlug === 'administrator') {
+            return Permissions::all();
+        }
+        $perms = [];
+        if ($roleId !== null) {
+            foreach (DB::all('SELECT permission FROM role_permissions WHERE role_id = ?', [$roleId]) as $r) {
+                $perms[$r['permission']] = true;
+            }
+        }
+        foreach (DB::all('SELECT permission, allowed FROM user_permissions WHERE user_id = ?', [$userId]) as $r) {
+            if ((int) $r['allowed'] === 1) {
+                $perms[$r['permission']] = true;
+            } else {
+                unset($perms[$r['permission']]);
+            }
+        }
+        // Only known permissions count (deny by default for anything else).
+        return array_values(array_intersect(Permissions::all(), array_keys($perms)));
+    }
+
+    public static function can(string $perm): bool
+    {
+        $u = self::user();
+        return $u !== null && in_array($perm, $u['permissions'], true);
+    }
+
+    public static function canAny(array $perms): bool
+    {
+        foreach ($perms as $p) {
+            if (self::can($p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static function isAdmin(): bool
+    {
+        return (self::user()['role_slug'] ?? '') === 'administrator';
     }
 
     public static function id(): int

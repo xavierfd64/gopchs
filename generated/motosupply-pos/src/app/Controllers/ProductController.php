@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Core\Audit;
 use App\Core\Auth;
 use App\Core\DB;
 use App\Core\Http;
@@ -93,9 +94,18 @@ final class ProductController extends Controller
             $image = ImageUpload::store($_FILES['image'] ?? null);
             if ($isNew) {
                 $id = ProductService::create($data, Auth::id(), $image);
+                Audit::log('product.create', 'product', $id, ['sku' => $data['sku'], 'name' => $data['name'], 'stock' => $data['stock_qty']]);
                 Http::flash('success', 'Product "' . $data['name'] . '" was created.');
             } else {
+                $before = ProductService::find($id);
                 ProductService::update($id, $data, $image, Http::post('remove_image') === '1');
+                $changed = [];
+                foreach (['name', 'sku', 'barcode', 'description', 'unit', 'cost_price', 'selling_price', 'low_stock_threshold'] as $k) {
+                    if ((string) ($before[$k] ?? '') !== (string) ($data[$k] ?? '')) {
+                        $changed[$k] = ['from' => $before[$k] ?? null, 'to' => $data[$k] ?? null];
+                    }
+                }
+                Audit::log('product.update', 'product', $id, ['sku' => $data['sku'], 'changes' => $changed]);
                 Http::flash('success', 'Product "' . $data['name'] . '" was updated.');
             }
         } catch (ValidationException $e) {
@@ -112,6 +122,7 @@ final class ProductController extends Controller
     {
         $id = $this->idParam('id', 'post');
         if (ProductService::setActive($id, false)) {
+            Audit::log('product.archive', 'product', $id);
             Http::flash('success', 'Product archived. It can no longer be sold and can be restored later.');
         }
         Http::redirect(url('products'));
@@ -121,6 +132,7 @@ final class ProductController extends Controller
     {
         $id = $this->idParam('id', 'post');
         if (ProductService::setActive($id, true)) {
+            Audit::log('product.restore', 'product', $id);
             Http::flash('success', 'Product restored.');
         }
         Http::redirect(url('products', ['status' => 'archived']));
@@ -139,6 +151,7 @@ final class ProductController extends Controller
             $v = ['mode' => Http::post('mode'), 'quantity' => Http::post('quantity'), 'reason' => Http::post('reason')];
             try {
                 $r = InventoryService::adjust($id, $v['mode'], $v['quantity'], $v['reason'], Auth::id());
+                Audit::log('inventory.adjust', 'product', $id, $r + ['mode' => $v['mode'], 'reason' => $v['reason']]);
                 Http::flash('success', sprintf(
                     'Stock for "%s" changed from %d to %d.',
                     $product['name'], $r['qty_before'], $r['qty_after']

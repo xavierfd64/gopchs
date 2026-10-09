@@ -18,8 +18,9 @@ final class Migrator
     public static function available(): array
     {
         $out = [];
-        foreach (glob(MOTO_ROOT . '/database/migrations/*.sql') ?: [] as $file) {
-            if (preg_match('/^(\d{3})_[a-z0-9_]+\.sql$/', basename($file), $m)) {
+        $files = array_merge(glob(MOTO_ROOT . '/database/migrations/*.sql') ?: [], glob(MOTO_ROOT . '/database/migrations/*.php') ?: []);
+        foreach ($files as $file) {
+            if (preg_match('/^(\d{3})_[a-z0-9_]+\.(sql|php)$/', basename($file), $m)) {
                 $out[] = ['version' => (int) $m[1], 'file' => $file];
             }
         }
@@ -45,8 +46,15 @@ final class Migrator
             if (in_array($m['version'], $done, true)) {
                 continue;
             }
-            foreach (self::statements((string) file_get_contents($m['file'])) as $sql) {
-                $this->pdo->exec($sql);
+            if (str_ends_with($m['file'], '.php')) {
+                // PHP migrations return function (PDO $pdo): void. They must be idempotent, because
+                // MySQL DDL cannot be rolled back: a retried migration simply skips finished steps.
+                $fn = require $m['file'];
+                $fn($this->pdo);
+            } else {
+                foreach (self::statements((string) file_get_contents($m['file'])) as $sql) {
+                    $this->pdo->exec($sql);
+                }
             }
             $stmt = $this->pdo->prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)');
             $stmt->execute([$m['version'], Clock::nowUtc()]);

@@ -241,10 +241,11 @@ final class Installer
                         // production = HTTPS required; testing = installed over HTTP, warning shown.
                         'security_mode' => $securityMode === 'production' ? 'production' : 'testing',
                     ]);
+                    $roleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'administrator'")->fetchColumn();
                     $pdo->prepare(
-                        'INSERT INTO users (username, password_hash, full_name, role, must_change_password, is_active, created_at, updated_at)
-                         VALUES (?, ?, ?, \'admin\', 0, 1, ?, ?)'
-                    )->execute([$admin['username'], $admin['hash'], $admin['full_name'], $now, $now]);
+                        'INSERT INTO users (username, password_hash, full_name, role, role_id, must_change_password, is_active, created_at, updated_at)
+                         VALUES (?, ?, ?, \'administrator\', ?, 0, 1, ?, ?)'
+                    )->execute([$admin['username'], $admin['hash'], $admin['full_name'], $roleId, $now, $now]);
                 });
             } catch (Throwable $e) {
                 Logger::error('Installer data step failed', $e);

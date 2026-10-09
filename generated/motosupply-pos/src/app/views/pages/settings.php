@@ -16,16 +16,7 @@ $toggle = static function (string $key, string $label, string $hint) use ($s): s
     </div>
     <button type="submit" form="settings-form" class="btn btn-primary">Save Changes</button>
   </div>
-  <div class="settings-layout">
-    <nav class="settings-nav" aria-label="Settings sections">
-      <a href="#store"><?= icon('store') ?> Store Information</a>
-      <a href="#receipt"><?= icon('receipt') ?> Receipt Information</a>
-      <a href="#currency"><?= icon('cash') ?> Currency &amp; Time</a>
-      <a href="#pos-prefs"><?= icon('pos') ?> POS Preferences</a>
-      <a href="#inventory-prefs"><?= icon('inventory') ?> Inventory Preferences</a>
-      <a href="#security"><?= icon('shield') ?> Password &amp; Security</a>
-      <a href="<?= e(url('settings.system')) ?>"><?= icon('settings') ?> System Check</a>
-    </nav>
+  <?php include __DIR__ . '/../partials/settings_tabs.php'; ?>
     <div class="stack">
       <form id="settings-form" class="card card-pad stack" method="post" action="<?= e(url('settings.save')) ?>" data-once novalidate>
         <?= csrf_field() ?>
@@ -69,23 +60,5 @@ $toggle = static function (string $key, string $label, string $hint) use ($s): s
         <div class="form-actions"><button type="submit" class="btn btn-primary">Save Changes</button></div>
       </form>
 
-      <form id="security" class="card card-pad stack" method="post" action="<?= e(url('settings.password')) ?>" data-once>
-        <?= csrf_field() ?>
-        <h3>Password &amp; Security</h3>
-        <p class="muted small">Change the administrator password. You will stay logged in on this device.</p>
-        <?php if ($pwError): ?><div class="alert alert-error" role="alert"><?= icon('alert') ?><span><?= e($pwError) ?></span></div><?php endif; ?>
-        <div class="form-grid">
-          <div class="field span-2"><label for="current_password">Current password</label><input id="current_password" name="current_password" type="password" autocomplete="current-password" required></div>
-          <div class="field"><label for="new_password">New password</label><input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required></div>
-          <div class="field"><label for="confirm_password">Confirm new password</label><input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" maxlength="72" required></div>
-        </div>
-        <div class="form-actions"><button type="submit" class="btn btn-primary">Change password</button></div>
-      </form>
-
-      <form class="card card-pad" method="post" action="<?= e(url('logout')) ?>">
-        <?= csrf_field() ?>
-        <div class="toggle-row"><div><strong>Log out</strong><small class="muted block">End your session on this device.</small></div><button type="submit" class="btn"><?= icon('logout') ?> Log out</button></div>
-      </form>
     </div>
-  </div>
 </div>

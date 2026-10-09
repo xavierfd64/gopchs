@@ -90,7 +90,7 @@ $sym = \App\Core\Settings::get('currency_symbol', '₱');
       <div class="empty-state compact"><?= icon('reports', 'icon-lg') ?><p>No records for the selected period.</p></div>
     <?php else: ?>
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead><tr>
             <?php foreach ($report['columns'] as [, $label, $type]): ?><th scope="col"<?= in_array($type, ['money', 'int'], true) ? ' class="num"' : '' ?>><?= e($label) ?></th><?php endforeach; ?>
           </tr></thead>

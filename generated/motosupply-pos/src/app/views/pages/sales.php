@@ -43,7 +43,7 @@ if ($f['from'] !== '') {
         <p>Completed sales from the POS appear here.</p></div>
     <?php else: ?>
       <div class="table-wrap">
-        <table class="table">
+        <table class="table table-cards">
           <thead><tr><th scope="col">Transaction number</th><th scope="col">Date and time</th><th scope="col" class="num">Items</th><th scope="col" class="num">Total</th><th scope="col">Payment method</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
           <tbody>
           <?php foreach ($list['rows'] as $s): ?>

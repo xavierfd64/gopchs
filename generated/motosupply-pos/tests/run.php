@@ -343,16 +343,16 @@ echo "\nVoids\n";
 test('Void restores stock atomically, keeps the record and cannot repeat', function () use ($p1, $p2, &$saleId) {
     $s1 = stock($p1);
     $s2 = stock($p2);
-    SaleService::void($saleId, 'Wrong item rung up', 1);
+    SaleService::void($saleId, 'Wrong item rung up', 1, 1);
     $sale = SaleService::find($saleId);
     eq('voided', $sale['status']);
     eq('Wrong item rung up', $sale['void_reason']);
     eq($s1 + 2, stock($p1));
     eq($s2 + 1, stock($p2));
     eq(2, (int) DB::value("SELECT COUNT(*) FROM stock_movements WHERE sale_id = ? AND movement_type = 'void'", [$saleId]));
-    throws(ValidationException::class, fn () => SaleService::void($saleId, 'again', 1), 'already been voided');
+    throws(ValidationException::class, fn () => SaleService::void($saleId, 'again', 1, 1), 'already been voided');
     eq($s1 + 2, stock($p1));
-    throws(ValidationException::class, fn () => SaleService::void($saleId, '', 1));
+    throws(ValidationException::class, fn () => SaleService::void($saleId, '', 1, 1));
 });
 
 echo "\nReports\n";

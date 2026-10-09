@@ -9,6 +9,17 @@ use App\Services\ReportService;
 
 final class DashboardController extends Controller
 {
+    /** Landing page: the first area this user may open. */
+    public function home(): void
+    {
+        foreach (['dashboard.view' => 'dashboard', 'pos.access' => 'pos', 'inventory.view' => 'products', 'sales.view' => 'sales', 'reports.view' => 'reports'] as $perm => $route) {
+            if (\App\Core\Auth::can($perm)) {
+                Http::redirect(url($route));
+            }
+        }
+        Http::redirect(url('account'));
+    }
+
     public function index(): void
     {
         $from = Http::query('from');

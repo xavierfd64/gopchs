@@ -29,3 +29,17 @@ footer { text-align: center; border-top: 1px dashed #999; margin-top: 10px; padd
   .no-print { display: none !important; }
   .receipt { border: 0; margin: 0 auto; padding: 0; width: 100%; max-width: 80mm; }
 }
+
+/* Paper sizes (Settings → Receipt & printing) */
+.receipt-logo { display: block; max-width: 70%; max-height: 64px; margin: 0 auto 8px; object-fit: contain; }
+.test-banner { text-align: center; background: #fff4d6; color: #6b4a00; margin: 0 auto 12px; padding: 8px; width: min(360px, calc(100vw - 32px)); border-radius: 4px; }
+.paper-58mm .receipt { width: min(260px, calc(100vw - 32px)); font-size: 11px; }
+.paper-58mm td, .paper-58mm th { font-size: 10px; }
+.paper-a4 .receipt { width: min(640px, calc(100vw - 32px)); }
+.is-embed { background: #fff; }
+.is-embed .receipt { border: 0; margin: 0 auto; }
+@media print {
+  .paper-58mm .receipt { max-width: 58mm; }
+  .paper-80mm .receipt { max-width: 80mm; }
+  .paper-a4 .receipt { max-width: none; width: 100%; font-size: 12pt; }
+}

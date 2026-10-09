@@ -36,6 +36,7 @@ final class InventoryService
             throw new ValidationException($errors);
         }
         $qty = (int) $qtyInput;
+        SaleService::assertTransactional();
 
         return DB::transaction(static function () use ($productId, $mode, $qty, $reason, $userId): array {
             $row = DB::one('SELECT id, stock_qty FROM products WHERE id = ? FOR UPDATE', [$productId]);

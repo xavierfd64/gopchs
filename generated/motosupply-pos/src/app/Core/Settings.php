@@ -21,6 +21,33 @@ final class Settings
         'show_low_stock_badge' => '1',
         // testing: HTTP allowed with a visible warning; production: HTTPS required (set in System Check).
         'security_mode' => 'testing',
+        // Receipt printing
+        'receipt_auto_print' => '0',
+        'receipt_paper' => '80mm',
+        'receipt_show_logo' => '1',
+        // Branding & theme
+        'logo_path' => '',
+        'favicon_path' => '',
+        'theme_primary' => '#dd4a2b',
+        'theme_sidebar' => '#1f2024',
+        // Daily email report
+        'email_enabled' => '0',
+        'email_recipients' => '',
+        'email_time' => '06:00',
+        'email_timezone' => '',
+        'email_sections' => 'summary,low_stock,out_of_stock,top_products',
+        'email_attach_pdf' => '1',
+        'email_attach_csv' => '1',
+        'email_on_visit' => '0',
+        'email_cron_key_hash' => '',
+        'mail_transport' => 'smtp',
+        'mail_from_address' => '',
+        'mail_from_name' => '',
+        'smtp_host' => '',
+        'smtp_port' => '587',
+        'smtp_encryption' => 'tls',
+        'smtp_username' => '',
+        'smtp_password_enc' => '',
     ];
 
     private static ?array $cache = null;

@@ -14,7 +14,9 @@
     csrf: root.getAttribute('data-csrf'),
     symbol: root.getAttribute('data-currency') || '₱',
     autoAdd: root.getAttribute('data-auto-add') === '1',
-    confirmClear: root.getAttribute('data-confirm-clear') === '1'
+    confirmClear: root.getAttribute('data-confirm-clear') === '1',
+    autoPrint: root.getAttribute('data-auto-print') === '1',
+    canDiscount: root.getAttribute('data-can-discount') === '1'
   };
 
   var $ = function (sel, ctx) { return (ctx || document).querySelector(sel); };
@@ -41,7 +43,13 @@
   var payError = $('[data-pay-error]');
   var completeBtn = $('[data-complete]');
   var toastEl = $('[data-toast]');
-  var jumpEl = $('[data-cart-jump]');
+  var hasDiscount = !!discountBox;
+  var stockErrorEl = $('[data-stock-error]');
+  var cartEl = $('[data-cart]');
+  var cartBar = $('[data-cart-bar]');
+  var cartBackdrop = $('[data-cart-backdrop]');
+  var payBarBtn = $('[data-pay-bar]');
+  var keypad = $('#keypad-dialog');
 
   /** @type {Map<number, {id:number,name:string,sku:string,barcode:?string,category:?string,price:number,stock:number,unit:string,image:?string,qty:number}>} */
   var cart = new Map();
@@ -185,19 +193,21 @@
     renderCart();
     return true;
   }
+  /** Change a line's quantity. Quantities above the known stock are refused (server re-checks). */
   function setQty(id, qty) {
     var line = cart.get(id);
-    if (!line) return;
-    if (qty <= 0) { cart.delete(id); }
-    else if (qty > line.stock) { toast('Only ' + line.stock + ' of ' + line.name + ' in stock.', true); line.qty = line.stock; }
-    else { line.qty = qty; }
+    if (!line) return false;
+    if (qty <= 0) { cart.delete(id); renderCart(); return true; }
+    if (qty > line.stock) { toast('Only ' + line.stock + ' of ' + line.name + ' in stock.', true); return false; }
+    line.qty = qty;
     renderCart();
+    return true;
   }
   function subtotal() {
     var s = 0; cart.forEach(function (l) { s += l.price * l.qty; }); return s;
   }
   function discountCents(sub) {
-    if (discountBox.hidden) return { cents: 0, ok: true };
+    if (!hasDiscount || discountBox.hidden) return { cents: 0, ok: true };
     var raw = discountValue.value.trim();
     if (raw === '') return { cents: 0, ok: true };
     var v = parseCents(raw);
@@ -218,7 +228,7 @@
     var items = 0;
     cart.forEach(function (l) {
       items += l.qty;
-      var row = el('div', 'c-line');
+      var row = el('div', 'c-line' + (l.qty > l.stock ? ' is-invalid' : ''));
       row.appendChild(thumb(l));
       var name = el('div', 'grow');
       name.appendChild(el('div', 'c-name', l.name));
@@ -233,41 +243,48 @@
       var qty = el('div', 'qty');
       var minus = el('button'); minus.type = 'button'; minus.setAttribute('aria-label', 'Decrease quantity of ' + l.name); minus.appendChild(svgIcon('minus'));
       minus.addEventListener('click', function () { setQty(l.id, l.qty - 1); });
-      var input = el('input'); input.type = 'text'; input.inputMode = 'numeric'; input.value = String(l.qty);
-      input.setAttribute('aria-label', 'Quantity of ' + l.name); input.maxLength = 5;
-      input.addEventListener('change', function () {
-        var n = /^\d{1,5}$/.test(input.value.trim()) ? parseInt(input.value, 10) : NaN;
-        if (isNaN(n)) { input.value = String(l.qty); toast('Enter a whole number quantity.', true); return; }
-        setQty(l.id, n);
+      // Tapping the quantity opens the numeric keypad (no on-screen keyboard on tablets).
+      var input = el('button', 'qty-value', String(l.qty)); input.type = 'button';
+      input.setAttribute('aria-label', 'Quantity of ' + l.name + ': ' + l.qty + '. Tap to change.');
+      input.addEventListener('click', function () { openKeypad(l.id, ''); });
+      input.addEventListener('keydown', function (e) {
+        if (/^\d$/.test(e.key)) { e.preventDefault(); openKeypad(l.id, e.key); }
       });
-      input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
       var plus = el('button'); plus.type = 'button'; plus.setAttribute('aria-label', 'Increase quantity of ' + l.name); plus.appendChild(svgIcon('plus'));
       plus.addEventListener('click', function () { setQty(l.id, l.qty + 1); });
       qty.appendChild(minus); qty.appendChild(input); qty.appendChild(plus);
       bottom.appendChild(qty);
       bottom.appendChild(el('span', 'c-total', fmt(l.price * l.qty)));
       row.appendChild(bottom);
+      if (l.qty > l.stock) row.appendChild(el('div', 'c-warn', 'Only ' + l.stock + ' in stock. Lower the quantity to continue.'));
       linesEl.appendChild(row);
     });
     emptyEl.hidden = cart.size > 0;
     countEl.textContent = items + (items === 1 ? ' item' : ' items');
     var t = totals();
     subtotalEl.textContent = fmt(t.sub);
-    discountEl.textContent = '-' + fmt(t.disc);
+    if (discountEl) discountEl.textContent = '-' + fmt(t.disc);
     totalEl.textContent = fmt(t.total);
-    discountError.hidden = t.discOk;
-    discountError.textContent = t.discOk ? '' : t.discMsg;
-    discountValue.setAttribute('aria-invalid', t.discOk ? 'false' : 'true');
-    jumpEl.hidden = cart.size === 0;
-    $('[data-jump-count]').textContent = 'Current sale · ' + countEl.textContent;
-    $('[data-jump-total]').textContent = fmt(t.total);
-    payBtn.disabled = cart.size === 0 || !t.discOk;
+    if (hasDiscount) {
+      discountError.hidden = t.discOk;
+      discountError.textContent = t.discOk ? '' : t.discMsg;
+      discountValue.setAttribute('aria-invalid', t.discOk ? 'false' : 'true');
+    }
+    var short = [];
+    cart.forEach(function (l) { if (l.qty > l.stock) short.push(l.name); });
+    stockErrorEl.hidden = short.length === 0;
+    stockErrorEl.textContent = short.length ? 'Not enough stock for: ' + short.join(', ') + '. Checkout is disabled until fixed.' : '';
+    var blocked = cart.size === 0 || !t.discOk || short.length > 0;
+    payBtn.disabled = blocked;
+    payBarBtn.disabled = blocked;
     clearBtn.disabled = cart.size === 0;
+    $('[data-bar-count]').textContent = countEl.textContent;
+    $('[data-bar-total]').textContent = fmt(t.total);
+    cartBar.classList.toggle('has-items', cart.size > 0);
   }
   function resetSale() {
     cart.clear();
-    discountValue.value = '';
-    discountBox.hidden = true;
+    if (hasDiscount) { discountValue.value = ''; discountBox.hidden = true; }
     token = uuid();
     renderCart();
   }
@@ -335,16 +352,18 @@
   });
 
   // ---------- discount ----------
-  $('[data-discount-toggle]').addEventListener('click', function () {
-    discountBox.hidden = !discountBox.hidden;
-    if (!discountBox.hidden) discountValue.focus();
-    renderCart();
-  });
-  $('[data-discount-remove]').addEventListener('click', function () {
-    discountValue.value = ''; discountBox.hidden = true; renderCart(); search.focus();
-  });
-  discountValue.addEventListener('input', renderCart);
-  discountType.addEventListener('change', renderCart);
+  if (hasDiscount) {
+    $('[data-discount-toggle]').addEventListener('click', function () {
+      discountBox.hidden = !discountBox.hidden;
+      if (!discountBox.hidden) discountValue.focus();
+      renderCart();
+    });
+    $('[data-discount-remove]').addEventListener('click', function () {
+      discountValue.value = ''; discountBox.hidden = true; renderCart(); search.focus();
+    });
+    discountValue.addEventListener('input', renderCart);
+    discountType.addEventListener('change', renderCart);
+  }
 
   // ---------- clear ----------
   clearBtn.addEventListener('click', function () {
@@ -411,8 +430,8 @@
     cart.forEach(function (l) { items.push({ product_id: l.id, quantity: l.qty }); });
     var body = {
       items: items,
-      discount_type: discountBox.hidden || discountValue.value.trim() === '' ? 'none' : discountType.value,
-      discount_value: discountValue.value.trim() || '0',
+      discount_type: !hasDiscount || discountBox.hidden || discountValue.value.trim() === '' ? 'none' : discountType.value,
+      discount_value: hasDiscount ? (discountValue.value.trim() || '0') : '0',
       tendered: tenderedInput.value.trim(),
       client_token: token
     };
@@ -436,8 +455,18 @@
         $('[data-done-tendered]').textContent = data.sale.tendered;
         $('[data-done-change]').textContent = data.sale.change;
         $('[data-done-receipt]').href = data.receipt_url + '&print=1';
+        var printStatus = $('[data-print-status]');
+        printStatus.hidden = true;
         resetSale();
+        closeCart();
         doneDialog.showModal();
+        if (data.duplicate) {
+          // A repeated submission returned the sale that was already saved: never print twice.
+          printStatus.textContent = 'This sale was already recorded (repeated request); it was not charged twice.';
+          printStatus.hidden = false;
+        } else if (cfg.autoPrint) {
+          autoPrint(data.receipt_url, printStatus);
+        }
         $('[data-new-sale]').focus();
         loadGrid('');
         return;
@@ -464,12 +493,118 @@
   document.addEventListener('keydown', function (e) {
     if (document.querySelector('dialog[open]')) return;
     if (e.key === 'F2') { e.preventDefault(); search.focus(); search.select(); }
-    else if (e.key === 'F4') { e.preventDefault(); $('[data-discount-toggle]').click(); }
+    else if (e.key === 'F4' && hasDiscount) { e.preventDefault(); $('[data-discount-toggle]').click(); }
     else if (e.key === 'F8') { e.preventDefault(); openPay(); }
   });
 
   window.addEventListener('beforeunload', function (e) {
     if (cart.size > 0 && !submitting) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // ---------- automatic receipt printing ----------
+  // Prints through a hidden same-origin frame after the sale is saved. Browsers do not reveal
+  // whether a printer is attached; failures never affect the saved sale.
+  function autoPrint(receiptUrl, statusEl) {
+    var holder = $('[data-print-holder]');
+    holder.textContent = '';
+    var frame = document.createElement('iframe');
+    frame.title = 'Receipt for printing';
+    frame.className = 'print-frame';
+    var done = false;
+    var timer = setTimeout(function () {
+      if (done) return;
+      done = true;
+      statusEl.textContent = 'The receipt could not be printed automatically. The sale is saved; use Print receipt.';
+      statusEl.hidden = false;
+    }, 8000);
+    frame.addEventListener('load', function () {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        statusEl.textContent = 'Receipt sent to the browser print dialog. If nothing printed, check the printer and use Print receipt.';
+      } catch (err) {
+        statusEl.textContent = 'Automatic printing is not available in this browser. The sale is saved; use Print receipt.';
+      }
+      statusEl.hidden = false;
+    });
+    frame.src = receiptUrl + '&embed=1';
+    holder.appendChild(frame);
+  }
+
+  // ---------- numeric keypad for quantities ----------
+  var kp = { id: null, value: '' };
+  var kpDisplay = $('[data-keypad-display]');
+  var kpError = $('[data-keypad-error]');
+  function kpRender() {
+    kpDisplay.textContent = kp.value === '' ? '0' : kp.value;
+    var line = cart.get(kp.id);
+    var n = kp.value === '' ? 0 : parseInt(kp.value, 10);
+    var msg = '';
+    if (line && n > line.stock) msg = 'Only ' + line.stock + ' in stock.';
+    kpError.textContent = msg;
+    kpError.hidden = msg === '';
+  }
+  function openKeypad(id, first) {
+    var line = cart.get(id);
+    if (!line) return;
+    kp.id = id;
+    kp.value = first || '';
+    $('[data-keypad-product]').textContent = line.name;
+    $('[data-keypad-stock]').textContent = 'Available stock: ' + line.stock + ' ' + (line.unit || '') + ' · current quantity: ' + line.qty;
+    kpRender();
+    keypad.showModal();
+    $('[data-keypad-confirm]').focus();
+  }
+  function kpPress(k) {
+    if (k === 'clear') kp.value = '';
+    else if (k === 'back') kp.value = kp.value.slice(0, -1);
+    else if (/^\d$/.test(k) && kp.value.length < 5) kp.value = (kp.value === '0' ? '' : kp.value) + k;
+    kpRender();
+  }
+  function kpConfirm() {
+    var line = cart.get(kp.id);
+    if (!line) { keypad.close(); return; }
+    var n = kp.value === '' ? 0 : parseInt(kp.value, 10);
+    if (n <= 0) { kpError.textContent = 'Enter a quantity of 1 or more (use the bin icon to remove the item).'; kpError.hidden = false; return; }
+    if (n > line.stock) { kpError.textContent = 'Only ' + line.stock + ' in stock. Enter a smaller quantity.'; kpError.hidden = false; return; }
+    setQty(kp.id, n);
+    keypad.close();
+  }
+  keypad.querySelectorAll('[data-key]').forEach(function (b) {
+    b.addEventListener('click', function () { kpPress(b.getAttribute('data-key')); });
+  });
+  keypad.querySelectorAll('[data-keypad-cancel]').forEach(function (b) {
+    b.addEventListener('click', function () { keypad.close(); }); // previous quantity kept
+  });
+  $('[data-keypad-confirm]').addEventListener('click', kpConfirm);
+  keypad.addEventListener('keydown', function (e) {
+    if (/^\d$/.test(e.key)) { e.preventDefault(); kpPress(e.key); }
+    else if (e.key === 'Backspace') { e.preventDefault(); kpPress('back'); }
+    else if (e.key === 'Delete') { e.preventDefault(); kpPress('clear'); }
+    else if (e.key === 'Enter') { e.preventDefault(); kpConfirm(); }
+  });
+
+  // ---------- cart sheet (tablet portrait and phones) ----------
+  var cartOpenBtn = $('[data-cart-open]');
+  function openCart() {
+    cartEl.classList.add('is-open');
+    cartBackdrop.hidden = false;
+    cartOpenBtn.setAttribute('aria-expanded', 'true');
+  }
+  function closeCart() {
+    cartEl.classList.remove('is-open');
+    cartBackdrop.hidden = true;
+    cartOpenBtn.setAttribute('aria-expanded', 'false');
+  }
+  cartOpenBtn.addEventListener('click', openCart);
+  $('[data-cart-close]').addEventListener('click', closeCart);
+  cartBackdrop.addEventListener('click', closeCart);
+  payBarBtn.addEventListener('click', openPay);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && cartEl.classList.contains('is-open') && !document.querySelector('dialog[open]')) closeCart();
   });
 
   renderCart();

@@ -33,6 +33,7 @@ final class SaleService
         string $clientToken,
         int $userId
     ): array {
+        self::assertTransactional();
         if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $clientToken)) {
             throw new ValidationException(['cart' => 'Invalid transaction token. Reload the POS page and try again.']);
         }
@@ -218,16 +219,33 @@ final class SaleService
     }
 
     /**
-     * Void a completed sale: keeps the original record, restores stock atomically and
-     * records the reason. A sale can be voided only once.
+     * Sales must never be recorded on non-transactional (MyISAM) tables: a rejected sale could
+     * leave its sale and line rows behind without deducting stock. Refuse instead.
      */
-    public static function void(int $saleId, string $reason, int $userId): void
+    public static function assertTransactional(): void
     {
+        $bad = DB::nonTransactionalTables();
+        if ($bad !== []) {
+            throw new ValidationException(['cart' => 'Sales are paused to protect your records: the database tables ('
+                . implode(', ', $bad) . ') do not support transactions. An administrator should open Settings → System Check.']);
+        }
+    }
+
+    /**
+     * Void a completed sale. The original sale and its lines are kept and marked voided; stock is
+     * restored and the reversal is recorded, all in one transaction. A sale can be voided once.
+     *
+     * $restoreStock = false is used only by the integrity correction for sales whose stock was
+     * never deducted (records left by a failed sale on non-transactional tables).
+     */
+    public static function void(int $saleId, string $reason, int $requesterId, int $approverId, bool $restoreStock = true): void
+    {
+        self::assertTransactional();
         $reason = trim($reason);
         if ($reason === '' || mb_strlen($reason) > 255) {
             throw new ValidationException(['reason' => 'Enter the reason for voiding (up to 255 characters).']);
         }
-        DB::transaction(static function () use ($saleId, $reason, $userId): void {
+        DB::transaction(static function () use ($saleId, $reason, $requesterId, $approverId, $restoreStock): void {
             $sale = DB::one('SELECT id, status FROM sales WHERE id = ? FOR UPDATE', [$saleId]);
             if ($sale === null) {
                 throw new ValidationException(['sale' => 'Sale not found.']);
@@ -235,22 +253,24 @@ final class SaleService
             if ($sale['status'] !== 'completed') {
                 throw new ValidationException(['sale' => 'This sale has already been voided.']);
             }
-            $items = DB::all('SELECT product_id, quantity FROM sale_items WHERE sale_id = ? ORDER BY product_id', [$saleId]);
             $now = Clock::nowUtc();
-            foreach ($items as $it) {
-                $p = DB::one('SELECT stock_qty FROM products WHERE id = ? FOR UPDATE', [$it['product_id']]);
-                $before = (int) $p['stock_qty'];
-                $qty = (int) $it['quantity'];
-                DB::run('UPDATE products SET stock_qty = stock_qty + ?, updated_at = ? WHERE id = ?', [$qty, $now, $it['product_id']]);
-                DB::run(
-                    'INSERT INTO stock_movements (product_id, user_id, movement_type, qty_before, qty_change, qty_after, reason, sale_id, created_at)
-                     VALUES (?, ?, \'void\', ?, ?, ?, ?, ?, ?)',
-                    [$it['product_id'], $userId, $before, $qty, $before + $qty, 'Void: ' . mb_substr($reason, 0, 240), $saleId, $now]
-                );
+            if ($restoreStock) {
+                $items = DB::all('SELECT product_id, SUM(quantity) AS quantity FROM sale_items WHERE sale_id = ? GROUP BY product_id ORDER BY product_id', [$saleId]);
+                foreach ($items as $it) {
+                    $p = DB::one('SELECT stock_qty FROM products WHERE id = ? FOR UPDATE', [$it['product_id']]);
+                    $before = (int) $p['stock_qty'];
+                    $qty = (int) $it['quantity'];
+                    DB::run('UPDATE products SET stock_qty = stock_qty + ?, updated_at = ? WHERE id = ?', [$qty, $now, $it['product_id']]);
+                    DB::run(
+                        'INSERT INTO stock_movements (product_id, user_id, movement_type, qty_before, qty_change, qty_after, reason, sale_id, created_at)
+                         VALUES (?, ?, \'void\', ?, ?, ?, ?, ?, ?)',
+                        [$it['product_id'], $requesterId, $before, $qty, $before + $qty, 'Void: ' . mb_substr($reason, 0, 240), $saleId, $now]
+                    );
+                }
             }
             $updated = DB::run(
-                'UPDATE sales SET status = \'voided\', void_reason = ?, voided_by = ?, voided_at = ? WHERE id = ? AND status = \'completed\'',
-                [$reason, $userId, $now, $saleId]
+                'UPDATE sales SET status = \'voided\', void_reason = ?, voided_by = ?, void_approved_by = ?, voided_at = ? WHERE id = ? AND status = \'completed\'',
+                [$reason, $requesterId, $approverId, $now, $saleId]
             )->rowCount();
             if ($updated !== 1) {
                 throw new ValidationException(['sale' => 'This sale has already been voided.']);
@@ -261,8 +281,9 @@ final class SaleService
     public static function find(int $id): ?array
     {
         $sale = DB::one(
-            'SELECT s.*, u.username AS cashier, v.username AS voided_by_name
+            'SELECT s.*, u.username AS cashier, v.username AS voided_by_name, a.username AS void_approved_by_name
                FROM sales s JOIN users u ON u.id = s.user_id LEFT JOIN users v ON v.id = s.voided_by
+               LEFT JOIN users a ON a.id = s.void_approved_by
               WHERE s.id = ?',
             [$id]
         );
