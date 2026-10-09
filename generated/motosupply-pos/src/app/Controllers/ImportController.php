@@ -88,7 +88,7 @@ final class ImportController extends Controller
                 Http::redirect(url('products.import', ['token' => $token, 'mode' => $mode]));
             }
             $done = ProductImport::apply($analysis, Auth::id());
-            $failedLines = array_map(static fn ($r) => ['line' => $r['line'], 'sku' => $r['input']['sku'] ?? '', 'reason' => implode('; ', $r['errors'])],
+            $failedLines = array_map(static fn ($r) => ['line' => $r['line'], 'sku' => $r['input']['sku'] ?? '', 'reason' => implode('; ', array_map(static fn ($m) => rtrim((string) $m, '.'), $r['errors']))],
                 array_values(array_filter($analysis['rows'], static fn ($r) => in_array($r['action'], ['skip', 'error'], true))));
             $summary = ['mode' => $mode, 'created' => $done['created'], 'updated' => $done['updated'], 'skipped' => $c['skip'], 'failed' => $c['error'], 'not_imported' => array_slice($failedLines, 0, 200)];
             Audit::log('products.import', 'import', $token, ['mode' => $mode, 'created' => $done['created'], 'updated' => $done['updated'], 'skipped' => $c['skip'], 'failed' => $c['error']]);
