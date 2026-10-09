@@ -267,7 +267,7 @@ final class Updater
         $log[] = 'Write permissions checked.';
 
         $stamp = gmdate('Ymd-His');
-        $backupDir = Backup::dir() . "/update-{$stamp}-from-" . MOTO_VERSION;
+        $backupDir = Backup::dir() . "/update-{$stamp}-from-" . MOTO_VERSION . "-" . bin2hex(random_bytes(3));
         if (!@mkdir($backupDir, 0755, true)) {
             throw new \RuntimeException('Nothing was changed: the backup folder could not be created in storage/backups/.');
         }
