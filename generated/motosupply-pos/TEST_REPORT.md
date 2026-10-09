@@ -1,237 +1,218 @@
-# Test report — MotoSupply POS 1.2.0 installer package
+# Test report — MotoSupply POS 1.3.0
 
-**Package tested:** `dist/MotoSupply-POS-Installer.zip` (sha256 `d0cfc913c68af3eb08479e3e8f56e96251bc213274d949cfee99062f18fc0a12`)
-**Date:** 2026-10-09 10:03 UTC
+**Packages tested:**
+- `dist/MotoSupply-POS-Installer.zip` (sha256 `353e1bffd03bcd830dca51643b0b6cfe076696d1d60da1e157ea00a2859572f5`)
+- `dist/MotoSupply-POS-Update.zip` (sha256 `2cab6defe26500ef103d2d4976bde0b2306d5e0449574c76925692b2c3ab0d59`). Signed with the release key; public key `zq0X6gsnb1kfFPbMY/qfAKuVQ6crvvICA8qq2X3zyks=`.
 
-**What changed in 1.2.0:**
-- The installer now prepares folders automatically and proves each one works with a real write test.
-- HTTPS detection is safe: proxy headers are trusted only from configured proxies.
-- Testing mode (HTTP, with warnings) and production mode (HTTPS required) are separate, and the HTTPS redirect is protected against loops.
-- Product-image upload and application logging are now covered by tests.
+**Date:** 2026-10-09 (UTC)
 
-All results below come from tests that were actually run on **clean extractions of the ZIP**. Reproduce them with `tests/verify_release.sh`.
+Every result below comes from tests that were **actually run** on clean extractions of these ZIPs, using `tests/verify_release.sh` (final run: **RELEASE VERIFIED**). Nothing was tested on a live InfinityFree account. See §7.
 
 ## Summary
 
-| Suite | Result |
-|---|---|
-| Package checks (structure, assets, `php -l` on 8.3, no secrets or logs) | passed (see §1) |
-| **PHP 8.3.6, Apache, subfolder install** | |
-| Installation wizard | 21 passed, 0 failed |
-| App end-to-end | 22 passed, 0 failed |
-| HTTP security | 17 passed, 0 failed |
-| **PHP 8.3.6, Apache, web-root install (config stored outside the document root)** | |
-| Installation wizard | 21 passed, 0 failed |
-| App end-to-end | 22 passed, 0 failed |
-| HTTP security | 17 passed, 0 failed |
-| **PHP 8.4.26, Apache (your hosting's PHP line), with `storage/logs/` and `uploads/products/` uploaded unwritable** | |
-| Installation wizard (HTTP / testing mode) | 21 passed, 0 failed |
-| App end-to-end | 22 passed, 0 failed |
-| HTTP security | 17 passed, 0 failed |
-| HTTPS / production mode | 7 passed, 0 failed |
-| **Folder preparation and HTTPS detection (run as unprivileged `www-data`)** | |
-| PHP 8.3 | 26 passed, 0 failed |
-| PHP 8.4 | 26 passed, 0 failed |
-| **Business logic (sales, stock, reports, concurrency)** | |
-| PHP 8.3 | 37 passed, 0 failed |
-| PHP 8.4 | 37 passed, 0 failed |
-
-**Live InfinityFree deployment was NOT verified.** No hosting account was available to this build. Run `INSTALLATION-CHECKLIST.md` on your site.
-
-## Your reported issues, and how each was verified
-
-| Issue | Fix | Evidence |
+| Suite | PHP 8.3.6 (Apache) | PHP 8.4.26 (Apache container) |
 |---|---|---|
-| `storage/logs/` not writable | The wizard creates missing folders with 0755. If a folder isn't writable, it tries `chmod` 0755 then 0775 (only when PHP owns the folder; never 0777). Failing that, it moves a placeholder-only folder aside and recreates it as PHP's own. Every result is proven with a real write test. | On PHP 8.4, the folders were uploaded owned by another user. The wizard reported *"Writable (write test passed); fixed automatically: folder recreated"*, and the install, uploads and logging all worked. |
-| `uploads/products/` not writable | Same as above. Product images were then uploaded and served. | App e2e: *"Product image upload is stored and served"*. A PHP file renamed to `.png` is rejected. A `.php` file in `uploads/` is not executed (403). |
-| Unfixable folder | Shown as **Warning** (`storage/logs`, `storage/sessions`, `uploads`) or **Failed** (`config`, `storage`). The message names the folder relative to the website folder, e.g. *(website folder)/storage/logs/*, gives File Manager steps, and offers **Recheck Requirements**. No absolute server path is shown. | Folder tests (scenario d). Wizard test: the install is blocked when `config/` is owned by another user, then Recheck shows OK after the fix. |
-| HTTPS "Not active" | HTTPS is detected from `HTTPS`, `REQUEST_SCHEME` and port 443. `X-Forwarded-Proto` and `X-Forwarded-SSL` count only from proxies listed in `trusted_proxies`. On HTTP the row is a **Warning**, and installing requires ticking a "test installation" box. Every page then shows a "Not secure. Testing mode only" bar. Production mode (HTTPS required) can only be switched on from a page loaded over HTTPS. | HTTPS e2e (7/7), folder/HTTPS tests (10 detection cases), and wizard steps *"HTTP install requires the testing-mode confirmation"* and *"System Check … HTTPS cannot be required over HTTP"*. |
-| Redirect loops | If HTTPS is required but cannot be confirmed (an untrusted proxy header, or a redirect that came straight back), MotoSupply shows a "Secure connection problem" page instead of redirecting again. | HTTPS e2e: both loop scenarios return the explanation page (503), not another redirect. |
+| Package checks, both ZIPs: structure, signature, checksums, allowed paths, no secrets/keys/logs, file modes, `php -l` | passed | — |
+| Installation wizard: subfolder install | 21 / 21 | — |
+| Installation wizard: web-root install, config outside the document root | 21 / 21 | — |
+| Installation wizard: `storage/logs` and `uploads/products` uploaded unwritable | — | 21 / 21 |
+| App end-to-end in a real browser (subfolder / root / 8.4) | 34 / 34, 34 / 34 | 34 / 34 |
+| HTTP security (subfolder / root / 8.4) | 17 / 17, 17 / 17 | 17 / 17 |
+| HTTPS production mode, real TLS | — | 7 / 7 |
+| **New** 1.3 HTTP tests: roles on every route, CSRF, void approval, users, branding, theme, cron URL | 36 / 36 | not run |
+| **New** upgrade: real 1.2.0 ZIP → `MotoSupply-POS-Update.zip` by hand → in-app update → restore | 31 / 31 | not run |
+| Service tests (business logic, 1.0–1.2) | 37 / 37 | 37 / 37 |
+| **New** 1.3 service tests: stock rules, integrity, permissions, PINs, audit, import, theme, secrets, email | 47 / 47 | 47 / 47 |
+| **New** updater tests: signature, tampering, traversal, symlinks, protected paths, downgrade, backups, restore | 13 / 13 | **skipped**: this PHP 8.4 image has no `zip` extension, and the network policy blocked installing it |
+| Folder preparation and HTTPS detection (as `www-data`) | 26 / 26 | 26 / 26 |
 
-## 1. Package checks
-```
-== Package
-No errors detected in compressed data of /home/user/gopchs/generated/motosupply-pos/dist/MotoSupply-POS-Installer.zip.
-ZIP integrity OK
-files: 94
-php -l OK on 68 files (8.3.6)
-assets OK
-```
-- **Absent (verified):** `config/config.php`, `storage/installed.lock`, `.env`, `.git`, `node_modules`, `tests/` and logs.
-- **No build step or third-party libraries.** CSS and JS are production files, icons are inline SVG, and system fonts are used.
-- `php -l` was also run with PHP 8.4.26 on all 68 PHP files extracted from the final ZIP: 0 failures.
+**Bugs found and fixed while testing 1.3:**
+- **POS cart off-screen:** at 1024×768 behind the HTTP notice, PAY NOW was cut off and Clear was hidden. The POS is now a fixed-height layout on screens ≥900 px wide.
+- **Updater backup collision:** two updates in the same second used the same backup folder name, so the second was refused. Names are now unique.
+- **Update ZIP file modes:** files extracted by hand came out world-writable (666). They are now 0644.
+- **Integrity "stock vs history" check:** it could never be cleared after a historical unrecorded change. It now compares stock with the latest movement, so a physical count clears it.
+- **Phantom-sale void:** voids now return only stock that was actually deducted, which handles partially damaged sales.
+- **Import update mode:** columns missing from the file would have blanked values. They are now kept, and every change is previewed.
+- **Migrations:** they now refuse to run if the pre-migration backup fails. Previously they continued.
+- **Email reports:** exhausted retries were reported as "busy". They now show "gave up", and a manual send can retry.
 
-## 2. Installation wizard (PHP 8.4, folders uploaded unwritable)
-| Result | Test |
-|---|---|
-| PASS | Opening the website starts the wizard (Welcome step) |
-| PASS | Later steps cannot be skipped |
-| PASS | Requirements step shows OK/Warning statuses, write-tested folders and HTTPS warning |
-| PASS | HTTP install requires the testing-mode confirmation |
-| PASS | Wrong database password gives a plain-language error and is not echoed |
-| PASS | Unknown database host and unknown database name are explained |
-| PASS | Database with conflicting tables from another application is refused |
-| PASS | Test connection succeeds with correct details |
-| PASS | Shop step validates and defaults to Asia/Manila and PHP |
-| PASS | Administrator step rejects admin/admin, weak and mismatched passwords |
-| PASS | Install summary shows no secrets |
-| PASS | A failed install (config folder not writable) rolls back and can be retried |
-| PASS | Success page: login URL, lock confirmation, password reminder, no secrets |
-| PASS | Database state after install: one hashed admin, schema version, shop settings |
-| PASS | Go to Login works and the first login succeeds |
-| PASS | System Check: write-tested folders, log written, HTTPS cannot be required over HTTP |
-| PASS | Installer is locked afterwards (GET and forged POSTs) |
-| PASS | Even with the lock and config removed, an installed database is never overwritten |
-| PASS | Installer internals and config are not web-accessible |
-| PASS | Wizard pages fit phone and tablet widths without horizontal scrolling |
-| PASS | No console errors during the wizard |
+## 1. Priority 1: oversale
 
-## 3. HTTPS / production mode (PHP 8.4, real TLS with a self-signed certificate)
-| Result | Test |
-|---|---|
-| PASS | Over HTTPS the requirement shows OK and no testing confirmation is needed |
-| PASS | Wizard installs in production mode over HTTPS |
-| PASS | Login over HTTPS: Secure session cookie, no insecure banner |
-| PASS | Production mode redirects plain HTTP to HTTPS |
-| PASS | No redirect loop: untrusted proxy header gets an explanation page instead |
-| PASS | No redirect loop: a second redirect within seconds is stopped |
-| PASS | System Check over HTTPS: HTTPS OK and mode switch works both ways |
+**Root cause (from probes):**
+- Single-till logic was already correct.
+- On MyISAM tables, which MySQL silently substitutes when InnoDB is unavailable, a failed sale could not roll back. 8 concurrent buyers for 1 unit left 1 sale but 4 `sale_items` rows.
+- The database also accepted negative stock.
 
-## 4. Folder preparation and HTTPS detection (PHP 8.4, as `www-data`)
-| Result | Test |
-|---|---|
-| PASS | Missing folders are created recursively |
-| PASS | Created folders pass a real write test |
-| PASS | Created folders use 0755 (never 0777) |
-| PASS | Safe default files written (.htaccess deny, uploads no-exec) |
-| PASS | Write-test files are cleaned up |
-| PASS | Read-only folders owned by PHP are fixed with chmod 755 |
-| PASS | Existing files in a fixed folder are untouched |
-| PASS | Foreign-owned placeholder folders are recreated and pass the write test |
-| PASS | Recreated uploads folder still has its index.html |
-| PASS | Unfixable folder is reported (not OK) after a failed write test |
-| PASS | Instructions name the folder relative to the website folder |
-| PASS | No absolute server path is shown |
-| PASS | Unwritable storage/ is a blocking failure |
-| PASS | Folder left exactly as it was when the fix is impossible |
-| PASS | Write test passes and leaves existing files alone |
-| PASS | Write test fails on a missing folder |
-| PASS | HTTPS=on is detected |
-| PASS | HTTPS=off is not HTTPS |
-| PASS | X-Forwarded-Proto from an untrusted client is ignored |
-| PASS | X-Forwarded-Proto from a trusted proxy (CIDR) is honoured |
-| PASS | X-Forwarded-SSL from a trusted proxy (single IP) is honoured |
-| PASS | Proxy outside the trusted range is ignored |
-| PASS | IPv6 trusted proxy range works |
-| PASS | Client IP taken from X-Forwarded-For only via trusted proxies |
-| PASS | Spoofed X-Forwarded-For is ignored without a trusted proxy |
-| PASS | HTTP shows a Warning (not Failed) with SSL instructions |
+| Scenario (from the request) | Test | Result |
+|---|---|---|
+| Stock 99, sell 100 → rejected, no partial deduction | `run_v13`: nothing written (sales, lines, movements unchanged), stock 99 | PASS |
+| Stock 99, sell 99 → accepted, stock 0 | movement 99 → 0 recorded | PASS |
+| Stock 99, restock 1,000 → 1,099 | adjustment before/change/after 99/1000/1099 | PASS |
+| Stock 0, sell 1 → rejected | | PASS |
+| Multi-product cart with one short line → whole sale rejected | stock of both unchanged, no rows written | PASS |
+| Same product on two lines exceeding stock | merged and rejected | PASS |
+| Zero, negative or fractional quantities | rejected | PASS |
+| Concurrency: 12 cashiers, last 5 units | exactly 5 sales, stock 0, 5 lines, 5 movements (no phantom lines) | PASS (8.3 and 8.4) |
+| Concurrency: duplicate submissions | one sale | PASS |
+| Database guard | direct `UPDATE … stock_qty - 3` on stock 2 is refused by MySQL | PASS |
+| MyISAM protection | sales and adjustments refused while a table is MyISAM; work again after InnoDB | PASS |
+| Stock ran out while a cart was open (browser, two tabs) | payment refused with a message; stock unchanged | PASS (e2e) |
+| Historical audit | negative, ledger and phantom findings detected; scan changes nothing; corrections only through count, void or review; guard enabled afterwards | PASS |
+| Upgrade with damaged data | 1.2 DB with MyISAM tables and stock −2 → InnoDB conversion; negative kept for review (guard not forced); listed on the integrity page | PASS (upgrade test) |
 
-## 5. Application end-to-end after install (PHP 8.4)
-| Result | Test |
-|---|---|
-| PASS | Unauthenticated pages redirect to login |
-| PASS | Invalid login shows a generic error |
-| PASS | Login works and a flagged account is forced to change its password |
-| PASS | Dashboard shows empty states with no data |
-| PASS | Create products through the form |
-| PASS | Duplicate SKU shows a field error |
-| PASS | Product image upload is stored and served |
-| PASS | Inventory page renders with stock status |
-| PASS | Manual stock adjustment is recorded |
-| PASS | POS: barcode scan (type + Enter) adds to cart; unknown barcode is reported |
-| PASS | POS: add by search/click, category tab, change quantity, discount |
-| PASS | POS: insufficient payment is rejected, then sale completes |
-| PASS | Receipt shows all required fields |
-| PASS | Stock deducted after the sale |
-| PASS | Sales history, detail and void with password |
-| PASS | Second sale for reports |
-| PASS | Dashboard shows real data |
-| PASS | Reports page and CSV/PDF downloads |
-| PASS | Settings save and system check |
-| PASS | No horizontal overflow on phone and tablet widths |
-| PASS | Logout destroys the session |
-| PASS | No JavaScript or CSP errors in the console |
+## 2. Priorities 2, 3 and 14: users, permissions, void approval, audit
 
-## 6. HTTP security checks (PHP 8.4)
-| Result | Test |
-|---|---|
-| PASS | API search without login returns 401 |
-| PASS | Checkout without login returns 401 |
-| PASS | Reports export without login redirects |
-| PASS | Unknown route returns 404 |
-| PASS | Login POST without CSRF token is rejected |
-| PASS | Login succeeds |
-| PASS | Dashboard accessible after login |
-| PASS | GET on a POST-only route returns 405 |
-| PASS | Checkout without CSRF header returns 403 |
-| PASS | Checkout with wrong CSRF header returns 403 |
-| PASS | Product name is HTML-escaped (no raw <script>) |
-| PASS | Escaped form is present |
-| PASS | Checkout ignores client prices (invalid cart rejected with 422) |
-| PASS | Logout |
-| PASS | Old session cookie no longer works after logout |
-| PASS | Session fixation: unknown session ID is not accepted as logged in |
-| PASS | 6th failed login is throttled (429) |
+**HTTP role matrix (`http_v13.php`):**
+- 21 routes × 5 users (admin, cashier, inventory, reports viewer, custom with no permissions), plus anonymous.
+- Every allowed and refused combination returned the expected 200 / 403 / redirect-to-login.
+- Refusals are written to the audit log.
+- Forged POSTs without permission:
+  - create user, change settings, change theme, upload update → all 403, nothing changed;
+  - a cashier's crafted discount request → 403, stock unchanged.
+- POSTs without a valid CSRF token → 403.
 
-## 7. Business-logic tests (PHP 8.4)
-| Result | Test |
-|---|---|
-| PASS | Money::parse accepts valid amounts and rejects bad ones |
-| PASS | Money formatting uses peso sign and grouping |
-| PASS | Percent discount rounds half-up to the centavo |
-| PASS | Local date range converts Asia/Manila to UTC |
-| PASS | Valid login succeeds and invalid login fails |
-| PASS | Password is stored only as a bcrypt/argon hash |
-| PASS | Login is throttled after repeated failures |
-| PASS | Weak new passwords are rejected |
-| PASS | Password change clears the forced-change flag |
-| PASS | Product creation records opening stock movement |
-| PASS | Duplicate SKU is rejected |
-| PASS | Duplicate barcode is rejected; empty barcodes are allowed many times |
-| PASS | Invalid prices and quantities are rejected |
-| PASS | Editing a product does not change its stock |
-| PASS | Search finds products by name, SKU, barcode and category |
-| PASS | Adjustment records before/change/after, reason and user |
-| PASS | Adjustment cannot make stock negative and requires a reason |
-| PASS | Successful sale: server prices, totals, change, stock and movements |
-| PASS | Client-supplied prices and totals are ignored |
-| PASS | Percent discount is calculated on the server |
-| PASS | Insufficient payment is rejected and nothing is saved |
-| PASS | Insufficient stock is rejected |
-| PASS | Discount larger than subtotal and invalid carts are rejected |
-| PASS | Archived products cannot be sold |
-| PASS | Repeated request with the same token does not create a duplicate sale |
-| PASS | Failed transaction rolls back completely |
-| PASS | Editing a product later keeps historical sale details |
-| PASS | Void restores stock atomically, keeps the record and cannot repeat |
-| PASS | Report totals match database records |
-| PASS | Date filters exclude sales outside the range |
-| PASS | Every report type builds for daily, weekly and monthly ranges |
-| PASS | Inventory valuation uses cost prices |
-| PASS | CSV export escapes fields and neutralizes formula injection |
-| PASS | PDF export is a structurally valid PDF |
-| PASS | Large PDF paginates |
-| PASS | Concurrent sales cannot oversell the last units |
-| PASS | Concurrent duplicate submissions create one sale |
+**User rules (service + HTTP):**
+- No self-escalation (own role and overrides are ignored).
+- Non-admins cannot assign Administrator or grant permissions they lack.
+- The last active administrator is protected.
+- Unknown permission names are ignored.
+- A deactivated user is logged out on their next request and cannot log in.
+- Reset password shows a temporary password once and forces a change.
+- New passwords must be strong and must not contain the username.
+
+**Void approval:**
+- **PIN policy:** refuses short, repeated and sequence PINs.
+- **Storage:** hash only, never equal to the login password. Setting it needs the current password.
+- **Approval:**
+  - approver must hold `sales.void.approve`;
+  - wrong PIN, wrong user, or the login password used as the PIN → refused;
+  - 5 failures lock that approver and 15 lock that IP, both for 15 minutes.
+- **Void result:** a reason is required; requester, approver, reason and time are recorded; the original lines are kept; stock is returned once; a second void has no effect.
+- **Browser:** the same flow, with "approved by" shown on the sale.
+
+**Audit:**
+- Secrets (PIN, passwords, SMTP password, tokens, cron key) never appear in `audit_log`.
+- The browser audit page lists sign-ins, voids, user creation and PIN changes.
+
+## 3. Priorities 4, 5, 6 and 9: responsive, keypad, sidebar, login (browser, Chromium)
+
+- **Layouts:**
+  - No horizontal overflow on 18 pages at 360×740, 390×844, 768×1024, 1024×768, 820×1180, 1180×820, 1280×800 and 1440×900.
+  - On the POS, total and Pay stay inside the viewport on tablet landscape (side cart) and on tablet portrait / phone (sticky bar and bottom sheet).
+  - Screenshots: `docs/screenshots/24-*`, `26-mobile-sales-cards.png`.
+- **Keypad:**
+  - Multi-digit entry, backspace, Clear, Cancel (quantity unchanged), Escape; above stock or zero refused; the cart changes only on Confirm.
+  - Physical keyboard digits, Backspace and Enter work.
+  - No text field gets focus, so the phone keyboard stays closed.
+  - It fits the screen at all three sizes, and keys are at least 44 px.
+- **Sidebar:** the rail collapses to 72 px; every icon has a tooltip; the choice persists after reload. Drawer on mobile.
+- **Login:**
+  - Show/hide password; correct `autocomplete`; empty submit blocked; generic error; no default credentials on the page.
+  - Forced password change works.
+- **Not tested:**
+  - physical touch devices and Safari/iOS (only Chromium emulation of the viewport sizes was used);
+  - screen-reader output.
+
+## 4. Priorities 7, 8 and 13: printing, branding, theme
+
+- **Receipt settings:**
+  - 58 mm paper applied; **Test print** opens a receipt marked TEST.
+  - With auto-print on, a completed sale creates the hidden print frame, and the sale is not blocked.
+  - Not tested: real printers, and the browser's print dialog itself (headless).
+- **Branding:**
+  - PNG logo stored as `uploads/branding/logo-<random>.png`, served as `image/png`, shown on the sign-in page.
+  - Refused: PHP disguised as PNG, SVG, files over 1 MB.
+  - A PHP file placed in `uploads/branding/` is **not executed** (403).
+  - Favicon upload and removal; the old file is deleted.
+- **Theme:**
+  - Live preview changes `--accent` before saving; the saved colour is applied on other pages.
+  - Refused: invalid values, CSS injection, and low-contrast yellow.
+  - Reset restores `#dd4a2b`.
+
+## 5. Priorities 10 and 11: CSV import and email reports
+
+**Import:**
+- Templates with and without the example row; the example row is never imported.
+- Row errors and duplicate SKU/barcode are found within the file and against the database.
+- **Create mode:** skips existing products, leaving their price and stock untouched.
+- **Update mode:**
+  - changes only details and prices;
+  - keeps columns missing from the file;
+  - lists old → new values;
+  - skips rows with no changes;
+  - never changes stock.
+- **Transactions:** a conflict mid-import rolls back every row.
+- **File formats:** semicolon CSV, Windows-1252, and our own formula-escaped exports.
+- **Browser:** upload → preview counts → confirm → summary.
+
+**Email:**
+- **Delivery:** a local SMTP server (`tests/smtp_sink.py`) received the test email over **STARTTLS with AUTH LOGIN**. In the browser, the test email was received and its decoded subject marked `[TEST]`.
+- **Accuracy:** report totals (count, net, discounts) equal the database figures; voided sales are excluded.
+- **Scheduling:**
+  - Exactly one email per date across the cron, URL and visit triggers.
+  - Not due before the send time; disabled → nothing sent.
+- **Attachments:** 2 PDFs (valid `%PDF` … `%%EOF`) and 1 CSV, decoded from the delivered email.
+- **Failures:** a failure is recorded and retried 3 times automatically, then reported as "gave up"; a manual send retries. The SMTP password does not appear in runs, the audit log or the logs.
+- **Security:** the SMTP password is never sent unencrypted to a remote host.
+- **Cron URL:**
+  - refused over HTTP and with a wrong key (403);
+  - works over HTTPS with the right key;
+  - key shown once and stored as SHA-256 only.
+- **Not tested:** real providers (Gmail and others), and whether InfinityFree allows outgoing SMTP.
+
+## 6. Priority 12: updates and migrations
+
+**Package validation (`updater_test.php`):**
+- **Rejected:**
+  - wrong signing key;
+  - a file modified after signing;
+  - `../`, absolute, `C:` and backslash paths;
+  - a symlink entry;
+  - unlisted files;
+  - signed manifests targeting `config/config.php`, `uploads/…`, `storage/…`, `install/…` or files outside the app;
+  - downgrade and same-version packages;
+  - installer or random ZIPs;
+  - non-ZIP files.
+- **Valid package:**
+  - files and a new migration are installed;
+  - products, users, sales, `config.php` and uploads are byte-for-byte unchanged;
+  - database dump and file backup are created; maintenance mode ends.
+- **Backup:** the dump was imported into a new database with identical row counts.
+- **Restore:** brings back the previous version and **deletes files the update added**.
+- **Failure recovery:** a failing migration triggers automatic restore of the previous files.
+
+**Real upgrade (`upgrade_test.sh`):**
+1. Installed the actual 1.2.0 release ZIP from git history and created data through the 1.2 UI and API.
+2. Damaged it: MyISAM tables, negative stock.
+3. Extracted `MotoSupply-POS-Update.zip` over it by hand.
+4. Results:
+   - `config.php` unchanged; extracted files not world-writable;
+   - the first visit made a full database backup and then migrated to schema 2;
+   - all tables InnoDB; data, password hashes and settings unchanged; admin became Administrator and signs in with the same password;
+   - the old installer stays locked;
+   - the update's json, sig and md files are blocked from the web (403); no errors were logged.
+5. Then the **in-app updater over HTTP** with a 1.3.1 test package:
+   - verified, summarised and installed; backups made; data unchanged;
+   - restore back to 1.3.0 worked;
+   - a 1.2.9 package was refused as a downgrade.
+
+**Notes on these tests:**
+- Test packages were signed with a throwaway key trusted only by the test site. The release private key stays outside the repository.
+- PHP's opcache serves cached old files for up to `opcache.revalidate_freq` seconds (2 s here) after files are replaced by hand. The tests wait 3 s. `UPDATE-README.md` tells users to reload if they see an error right after uploading.
+
+## 7. Not verified / limitations
+
+- **Live hosting:** not tested on InfinityFree or any live shared host. Hosting differences (PHP extensions, opcache settings, blocked SMTP ports, upload limits) can only be confirmed on your site: follow `INSTALLATION-CHECKLIST.md`.
+- **PHP 8.4:** the updater was not tested there, because the test image lacks `zip`. On a host without `zip` or `sodium`, Settings → Updates says so and disables uploading; manual updates still work.
+- **Devices:** no real tablets, phones or iOS Safari; Chromium only.
+- **Printing:** no real printers. Silent printing is not possible from a web page.
+- **Email:** no real email providers.
+- **Load:** concurrency was tested with 12 parallel PHP processes against MariaDB 10.11; no large-scale load testing.
 
 ## 8. Environment
-| Item | Value |
-|---|---|
-| PHP | 8.3.6 (Ubuntu Apache mod_php) and 8.4.26 (official `php:8.4-apache` image with `pdo_mysql`) |
-| Database | 10.11.14-MariaDB-0ubuntu0.24.04.1 |
-| Web server | Apache 2.4 with `.htaccess` (AllowOverride All); HTTPS with a self-signed certificate |
-| Browser | Chromium (Playwright, headless) at 1440×900, 1280×860, 768×1024 and 375×812 |
-| Node.js | Used only to run the browser tests on the development machine. Not needed on the host. |
 
-## 9. Remaining limitations
-- **InfinityFree itself is untested.** Things to confirm there:
-  - Its `.htaccess` support.
-  - Whether PHP can write next to `htdocs/` (if not, the config stays in the protected `config/` folder automatically).
-  - How its file ownership behaves after extraction.
-
-  The PHP 8.4 container reproduces the reported folder problem, but it is not InfinityFree.
-- **When a folder is recreated,** the original is left beside it as `.logs-unwritable-…` or `.products-unwritable-…`. PHP cannot delete another user's files. These leftovers contain only placeholder files, are blocked from the web (verified 403), and can be deleted in the File Manager.
-- **HTTPS was tested with a self-signed certificate,** not a real one. Proxy-terminated SSL (for example Cloudflare) needs `trusted_proxies` in the configuration file, as documented in README.
-- **Hardware was simulated:** barcode scanners as fast typing plus Enter, and receipts checked on screen rather than printed.
-- Feature limits (cash only, one administrator, whole-sale voids) are unchanged; see README "Known limitations".
+- PHP 8.3.6 (Apache 2.4 mod_php, opcache on) and PHP 8.4.26 (official `php:8.4-apache` image).
+- MariaDB 10.11.
+- Chromium via Playwright.
+- Python 3 SMTP test server.
+- Reproduce with `tests/verify_release.sh` (needs the local Apache vhosts described in the script header).
