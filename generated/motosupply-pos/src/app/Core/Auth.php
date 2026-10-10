@@ -19,6 +19,25 @@ final class Auth
      */
     public static function attempt(string $username, string $password, string $ip): string
     {
+        [$status, $user] = self::verifyCredentials($username, $password, $ip);
+        if ($status !== 'ok') {
+            return $status;
+        }
+        Session::regenerate();
+        Csrf::rotate();
+        $_SESSION['user_id'] = (int) $user['id'];
+        $_SESSION['_last_activity'] = time();
+        self::$user = null;
+        return 'ok';
+    }
+
+    /**
+     * Check a username and password with the shared login throttle, without starting a session
+     * (used by the web login and by the cashier desktop API).
+     * @return array{0:'ok'|'invalid'|'locked',1:?array} status and, when ok, the users row
+     */
+    public static function verifyCredentials(string $username, string $password, string $ip): array
+    {
         $username = mb_substr(trim($username), 0, 50);
         $since = gmdate('Y-m-d H:i:s', time() - self::LOCKOUT_MINUTES * 60);
 
@@ -32,7 +51,7 @@ final class Auth
         );
         if ($userFailures >= self::MAX_ATTEMPTS || $ipFailures >= self::MAX_IP_ATTEMPTS) {
             self::record($username, $ip, false);
-            return 'locked';
+            return ['locked', null];
         }
 
         $user = DB::one('SELECT * FROM users WHERE username = ? AND is_active = 1', [$username]);
@@ -42,20 +61,24 @@ final class Auth
 
         self::record($username, $ip, $valid);
         if (!$valid) {
-            return 'invalid';
+            return ['invalid', null];
         }
 
         if (password_needs_rehash($user['password_hash'], PASSWORD_DEFAULT)) {
             DB::run('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $user['id']]);
         }
         DB::run('UPDATE users SET last_login_at = ? WHERE id = ?', [Clock::nowUtc(), $user['id']]);
+        return ['ok', $user];
+    }
 
-        Session::regenerate();
-        Csrf::rotate();
-        $_SESSION['user_id'] = (int) $user['id'];
-        $_SESSION['_last_activity'] = time();
-        self::$user = null;
-        return 'ok';
+    /**
+     * Act as a user for this request without a session (token-authenticated API requests).
+     * Returns false when the user is missing or inactive.
+     */
+    public static function actAs(int $userId): bool
+    {
+        self::$user = self::load($userId);
+        return self::$user !== null;
     }
 
     private static function record(string $username, string $ip, bool $success): void
@@ -211,6 +234,7 @@ final class Auth
         Session::regenerate();
         Csrf::rotate();
         self::$user = null;
+        \App\Services\ApiTokens::revokeAllForUser($userId);
     }
 
     public static function reset(): void

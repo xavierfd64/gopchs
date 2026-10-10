@@ -175,6 +175,9 @@ final class UserService
             throw new ValidationException(['user' => 'This is the last active administrator and cannot be deactivated.']);
         }
         DB::run('UPDATE users SET is_active = ?, updated_at = ? WHERE id = ?', [$active ? 1 : 0, Clock::nowUtc(), $id]);
+        if (!$active) {
+            ApiTokens::revokeAllForUser($id); // signs the user out of the cashier desktop app too
+        }
     }
 
     /** Set a temporary password the user must change at next login. Returns it (shown once). */
@@ -198,6 +201,7 @@ final class UserService
         $temp .= '#' . random_int(10, 99);
         DB::run('UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = ? WHERE id = ?',
             [password_hash($temp, PASSWORD_DEFAULT), Clock::nowUtc(), $id]);
+        ApiTokens::revokeAllForUser($id);
         return $temp;
     }
 }

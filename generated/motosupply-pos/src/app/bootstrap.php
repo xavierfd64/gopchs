@@ -9,9 +9,9 @@ declare(strict_types=1);
 if (!defined('MOTO_ROOT')) {
     define('MOTO_ROOT', dirname(__DIR__));
 }
-const MOTO_VERSION = '1.3.0';
+const MOTO_VERSION = '1.4.0';
 const MOTO_MIN_PHP = '8.1.0';
-const MOTO_SCHEMA_VERSION = 2;
+const MOTO_SCHEMA_VERSION = 3;
 
 spl_autoload_register(static function (string $class): void {
     if (!str_starts_with($class, 'App\\')) {

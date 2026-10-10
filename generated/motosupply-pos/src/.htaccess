@@ -19,6 +19,11 @@ DirectoryIndex index.php
   </IfModule>
 </FilesMatch>
 
+# Pass the Authorization header to PHP for the cashier desktop app (api.php) on CGI/FastCGI hosts.
+<IfModule mod_setenvif.c>
+  SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
 <IfModule mod_headers.c>
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "same-origin"

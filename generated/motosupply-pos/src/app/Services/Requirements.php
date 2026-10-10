@@ -27,6 +27,7 @@ final class Requirements
     /** Files that must be present for the application to run. */
     public const REQUIRED_FILES = [
         'index.php',
+        'api.php',
         '.htaccess',
         'app/bootstrap.php',
         'app/helpers.php',
