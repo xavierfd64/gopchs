@@ -1,4 +1,4 @@
-# Test report — MotoSupply POS Windows cashier app 1.0.0
+# Test report — MotoSupply POS Windows cashier app 1.0.1
 
 **Date:** 2026-10-10
 
@@ -8,8 +8,19 @@
 
 | File | Size | SHA-256 |
 |---|---|---|
-| `MotoSupply-POS-Setup.exe` | 102,720,321 bytes | `8ab0587bd5360cd0780520b4b741bf286be3c6032f28c40338711ea87d633573` |
-| `MotoSupply-POS-Portable.exe` | 102,457,898 bytes | `45f72db6bc49e2ef2aa844b89eb65cb61a4e0fd3c180952bd8f4b931c272112f` |
+| `MotoSupply-POS-Setup.exe` | 102,720,541 bytes | `cb1b5a27b6c6ab87f76695ed3ff69771e9a985de8f4c175b4a945a3d84c5ae75` |
+| `MotoSupply-POS-Portable.exe` | 102,458,102 bytes | `79a6f54f81e129237b2f083aa98bf261344a1aab4523d1fe6a1f06120d609e44` |
+
+## 1.0.1 — blank window after installing (fixed)
+- **Reported:** after installing 1.0.0 on Windows, the window stayed empty and dark.
+- **Cause:** the app lets its window load only its own screen files. It compared the requested file (spaces decoded) with the app folder written as a URL (spaces as `%20`). The default install folder `…\Programs\MotoSupply POS` contains a space, so the app blocked its own screen. The tests had always run from folders without spaces. The black window seen under Wine was the same bug, wrongly put down to Wine at the time.
+- **Fix:** the URL is turned back into a real file path and compared as a path; letter case is ignored on Windows. If the screen still fails to load, an error message is shown instead of an empty window.
+- **New test `tests/packaged_start.mjs`:** starts the packaged app (asar, packaged mode) from a folder without and with a space.
+  - The 1.0.0 check fails it: no screen in "MotoSupply POS".
+  - 1.0.1 passes both.
+  - It runs the Linux build of the same code; Windows itself was not available.
+- **New unit test:** Windows paths with spaces and different letter case are accepted. `..`, encoded `..`, other folders, look-alike folder names, network shares and non-file URLs are refused.
+- End-to-end 21/21 and unit 10/10 were rerun on 1.0.1, including the probes that check that everything else is still blocked.
 
 All results below come from tests that were actually run. Nothing was tested on a real Windows PC, with a real receipt printer, or against a live hosted server (see §5).
 
@@ -18,7 +29,8 @@ All results below come from tests that were actually run. Nothing was tested on 
 | Suite | Where | Result |
 |---|---|---|
 | Server cashier API (`tests/api_test.php`) | PHP 8.3 + Apache, fresh install | 32 / 32 |
-| Desktop unit tests (`tests/unit`) | Node 22 | 9 / 9 |
+| Desktop unit tests (`tests/unit`) | Node 22 | 10 / 10 |
+| Packaged app start-up from a folder with a space (`tests/packaged_start.mjs`) | Linux build, Xvfb | 2 / 2 (1.0.0 fails it) |
 | Desktop end-to-end (`tests/e2e.mjs`): the real Electron app against the real server | Linux, Xvfb | 21 / 21 |
 | Windows installer: install, shortcuts, uninstall entry, uninstall | Wine 9.0 (not real Windows) | passed (details in §4) |
 | Windows app start-up | Wine 9.0 | **not usable under Wine** (§4) |
@@ -82,18 +94,19 @@ Receipt printing in these tests goes to PDF through a development-only switch, b
 - **Executables:**
   - Setup and Portable are PE32 (NSIS); the app is PE32+ x64.
   - **None is code-signed.**
-  - The app exe carries the icon (16–256 px) and version information (MotoSupply POS 1.0.0, MotoSupply).
+  - The app exe carries the icon (16–256 px) and version information (MotoSupply POS 1.0.1, MotoSupply).
 - **`app.asar` contents:** only the built main, preload and screen files, the icon and `package.json`. No sources, tests or credentials. The packaged scripts are byte-identical to the code that passed the end-to-end tests.
 - **Installer under Wine 9.0:**
   - The GUI runs: licence, "Only for me (root)" as the default per-user scope, `…\AppData\Local\Programs\MotoSupply POS`.
-  - The silent install (`/S`) installs 321 MB.
-  - Start Menu and Desktop shortcuts are created. The uninstall entry is in HKCU with name, version 1.0.0, publisher, icon and a quiet-uninstall command.
+  - The silent install (`/S`) installs 321 MB (1.0.1 rechecked in a fresh Wine prefix).
+  - Start Menu and Desktop shortcuts are created. The uninstall entry is in HKCU with name, version 1.0.1, publisher, icon and a quiet-uninstall command.
   - The silent uninstall removes the program, shortcuts and registry entry, and keeps `%APPDATA%\MotoSupply POS\settings.json`.
 - **Wine artifact:** Wine's stub `powershell.exe` reports success for every command, so the installer's "app is running" check misfires (silent install exits with code 2, and the GUI asks to close the app). With `WINEDLLOVERRIDES=powershell.exe=d` the installer falls back to `tasklist` and installs normally. Real Windows has real PowerShell; this needs confirming on a Windows PC.
-- **App under Wine:** the main and GPU processes start and a "MotoSupply POS" window is created. Under Wine it stays black and makes no network requests (Chromium's Windows networking and composition are incomplete in Wine). This is a Wine limitation and says nothing either way about real Windows.
+- **App under Wine:** Wine cannot draw the app's window in this test environment (the whole screen stays black, even with GPU switched off), so Wine cannot show whether the screen loads. The 1.0.0 black window was not only Wine: it was the bug fixed in 1.0.1 (see the top of this report).
+- Wine needs a display (`DISPLAY`) even for silent installs; without one the installer hangs. This is a test-environment detail.
 
 ## 5. Not tested — please check on the shop PC
-- Installing and running on real **Windows 10/11** (SmartScreen will warn because the files are not signed).
+- Installing and running on real **Windows 10/11** (SmartScreen will warn because the files are not signed). 1.0.0 was installed on Windows by the shop and showed the blank-window bug; 1.0.1 has not yet been run on Windows.
 - A real **USB barcode scanner** (tests typed the codes as keyboard input, the way scanners send them).
 - A real **receipt printer** (thermal or normal), automatic printing to it, and paper/driver settings.
 - A **touchscreen**.

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { validateServerUrl, validCart, validAmount, cartSignature, isUuidV4, safeColor } = require('../../dist/shared/validate.cjs');
+const { validateServerUrl, validCart, validAmount, cartSignature, isUuidV4, safeColor, fileUrlInsideDir } = require('../../dist/shared/validate.cjs');
 const { Cart, formatMoney, parseMoney, keypadPress, quickCash } = require('../../dist/shared/cart.cjs');
 const { receiptHtml, esc } = require('../../dist/shared/receipt.cjs');
 
@@ -19,6 +19,21 @@ test('server URL: HTTPS required; HTTP only for this computer in explicit develo
   for (const bad of ['', 'ftp://x.example', 'javascript:alert(1)', 'file:///etc/passwd', 'https://u:p@x.example', 'https://x.example/?a=1', 'https://x.example/#h', 'https://', 'x'.repeat(400)]) {
     assert.equal(validateServerUrl(bad, true).ok, false, bad);
   }
+});
+
+test('window may load only the app\'s own screen files (also from folders with spaces)', () => {
+  const winDir = 'C:\\Users\\Shop Till\\AppData\\Local\\Programs\\MotoSupply POS\\resources\\app.asar\\dist\\renderer';
+  const winBase = 'file:///C:/Users/Shop%20Till/AppData/Local/Programs/MotoSupply%20POS/resources/app.asar/dist/renderer';
+  assert.ok(fileUrlInsideDir(`${winBase}/index.html`, winDir, true));
+  assert.ok(fileUrlInsideDir(`${winBase}/styles.css`, winDir, true));
+  assert.ok(fileUrlInsideDir(`file:///c:/users/shop%20till/appdata/local/programs/motosupply%20pos/resources/app.asar/dist/renderer/app.js`, winDir, true), 'drive/case differences');
+  for (const bad of [`${winBase}/../main/main.js`, `${winBase}/%2e%2e/main/main.js`, 'file:///C:/Windows/win.ini', `${winBase}`, `${winBase}-evil/app.js`,
+    'https://example.com/index.html', 'file://server/share/x.html', 'not a url']) {
+    assert.equal(fileUrlInsideDir(bad, winDir, true), false, bad);
+  }
+  const posixDir = '/opt/MotoSupply POS/resources/app.asar/dist/renderer';
+  assert.ok(fileUrlInsideDir('file:///opt/MotoSupply%20POS/resources/app.asar/dist/renderer/index.html', posixDir, false));
+  assert.equal(fileUrlInsideDir('file:///opt/MotoSupply%20POS/resources/app.asar/dist/main/main.js', posixDir, false), false);
 });
 
 test('cart and amount validation before anything is sent', () => {

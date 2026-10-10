@@ -1,5 +1,14 @@
 # Changelog — MotoSupply POS Windows cashier app
 
+## [1.0.1] — 2026-10-10
+
+### Fixed
+- **Blank window after installing.** The app blocked its own screen files when it was installed in a folder whose name contains a space, such as the default `…\Programs\MotoSupply POS`. The window stayed empty. The check now compares real file paths (and ignores letter case on Windows), so the screen loads from any folder. Everything outside the app's own screen folder is still blocked.
+- If the screen ever fails to load, the app now shows an error message instead of an empty window.
+
+### Changed
+- Uses the cashier API at `index.php?api=…`, which is what MotoSupply 1.4.0 provides (needed for the corrected 1.4.0 update package).
+
 ## [1.0.0] — 2026-10-10
 First release. Requires a MotoSupply website 1.4.0 or newer.
 

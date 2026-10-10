@@ -1,5 +1,8 @@
 // Pure helpers shared by the main process and the unit tests (no Electron imports here).
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 export interface ServerUrlResult {
   ok: boolean;
   /** Normalised base URL without trailing slash, e.g. https://shop.example.com/pos */
@@ -80,4 +83,22 @@ export function safeColor(c: unknown, fallback: string): string {
 /** Cart signature: same products and quantities → the same checkout attempt (same client token). */
 export function cartSignature(items: CartLineInput[], discount = ''): string {
   return [...items].sort((a, b) => a.product_id - b.product_id).map((i) => `${i.product_id}x${i.quantity}`).join(',') + '|' + discount;
+}
+
+/**
+ * Is this file:// URL a file inside `dir`? Used to let the window load only the app's own screen files.
+ * The URL is turned back into a real path before comparing, so folders with spaces or other
+ * percent-encoded characters ("…\\Programs\\MotoSupply POS\\…") match. On Windows, letter case is ignored.
+ */
+export function fileUrlInsideDir(url: string, dir: string, windows = process.platform === 'win32'): boolean {
+  if (!/^file:/i.test(url)) return false;
+  let file: string;
+  try {
+    file = fileURLToPath(url, { windows });
+  } catch {
+    return false;
+  }
+  const p = windows ? path.win32 : path.posix;
+  const rel = p.relative(dir, file);
+  return rel !== '' && !rel.startsWith('..') && !p.isAbsolute(rel);
 }

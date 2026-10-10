@@ -4,7 +4,7 @@ A Windows app for the shop counter. Cashiers sign in with their usual MotoSupply
 search products, take cash payments and print receipts. Everything else (products, stock, users,
 reports, settings, branding) stays in the MotoSupply website.
 
-- **Version:** 1.0.0. See `CHANGELOG.md`.
+- **Version:** 1.0.1. See `CHANGELOG.md`.
 - **Needs:** Windows 10 or 11 (64-bit), and a MotoSupply website running **version 1.4.0 or newer** over **HTTPS**.
 - **Files:**
 
@@ -86,10 +86,10 @@ reports, settings, branding) stays in the MotoSupply website.
 
 ## Updating the app
 
-Install the new `MotoSupply-POS-Setup.exe` over the old one. Your server address and printer choice are kept (they live in `%APPDATA%\MotoSupply POS`), and nothing on the server changes.
+Close the app, then install the new `MotoSupply-POS-Setup.exe` over the old one. Your server address and printer choice are kept (they live in `%APPDATA%\MotoSupply POS`), and nothing on the server changes.
 
 - The app never updates the website or its database.
-- There is no automatic updater in 1.0.0.
+- There is no automatic updater.
 - Uninstalling keeps `%APPDATA%\MotoSupply POS` (server address, printer). Delete that folder to forget them.
 
 ## Code signing
@@ -100,7 +100,7 @@ The installer and app are **not signed** in this release (no code-signing certif
 2. Build on Windows with `CSC_LINK` / `CSC_KEY_PASSWORD` set.
 3. Set `"signAndEditExecutable": true` in `package.json`.
 
-Until then, distribute the files only from a trusted place (your administrator), and compare the SHA-256 checksums in `release/SHA256SUMS.txt`.
+Until then, distribute the files only from a trusted place (your administrator), and compare the SHA-256 checksums in `SHA256SUMS.txt` (next to the files in `windows-release/`).
 
 ## Building from source (developers)
 
@@ -117,6 +117,13 @@ End-to-end tests (Linux, against a local MotoSupply test site):
 
 ```bash
 xvfb-run node tests/e2e.mjs http://127.0.0.1:8090 <test-database>
+```
+
+Start-up check of the packaged app, installed in a folder with a space in its name (like the Windows default):
+
+```bash
+npx electron-builder --linux dir --x64 --publish never -c.directories.output=/tmp/moto-linux
+xvfb-run node tests/packaged_start.mjs /tmp/moto-linux/linux-unpacked
 ```
 
 **Security design:**

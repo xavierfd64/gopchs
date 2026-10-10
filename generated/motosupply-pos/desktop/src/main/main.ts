@@ -15,7 +15,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ApiClient, type ApiResult } from './api';
 import { insecureLocalhostAllowed, machineConfigLocation, readUserSettings, serverSetting, writeUserSettings } from './config';
-import { cartSignature, isUuidV4, validAmount, validCart, validCredentials, validateServerUrl, type CartLineInput } from '../shared/validate';
+import { cartSignature, fileUrlInsideDir, isUuidV4, validAmount, validCart, validCredentials, validateServerUrl, type CartLineInput } from '../shared/validate';
 import { receiptHtml, type ReceiptSale, type ReceiptSettings, type ShopInfo } from '../shared/receipt';
 
 const VERSION = app.getVersion();
@@ -429,6 +429,13 @@ function createWindow(): void {
     }
   });
   win.on('closed', () => { win = null; });
+  // Never leave the cashier looking at an empty window: say that the screen did not load.
+  win.webContents.on('did-fail-load', (_e, code, desc, _url, isMainFrame) => {
+    if (isMainFrame && code !== -3) {
+      dialog.showErrorBox('MotoSupply POS could not start',
+        `The app screen failed to load (${desc}). Please reinstall MotoSupply POS or contact your administrator.`);
+    }
+  });
   void win.loadURL(RENDERER_URL);
 }
 
@@ -437,8 +444,7 @@ function harden(): void {
   const ui = session.fromPartition(UI_PARTITION);
   ui.webRequest.onBeforeRequest((details, cb) => {
     const u = details.url;
-    const allowed = (u.startsWith('file://') && decodeURIComponent(new URL(u).pathname).startsWith(pathToFileURL(RENDERER_DIR).pathname))
-      || u.startsWith('data:') || u.startsWith('devtools://');
+    const allowed = fileUrlInsideDir(u, RENDERER_DIR) || u.startsWith('data:') || u.startsWith('devtools://');
     cb({ cancel: !allowed });
   });
   ui.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
