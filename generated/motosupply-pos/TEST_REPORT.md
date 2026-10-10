@@ -1,8 +1,8 @@
 # Test report — MotoSupply POS 1.4.0 (adds the cashier API for the Windows app)
 
 **Packages:**
-- `dist/MotoSupply-POS-Installer.zip` — sha256 `111a6d9e4769a763bb2609d737c9eaf6f09e9dd388881fce9ac8520f460d4223`
-- `dist/MotoSupply-POS-Update.zip` — sha256 `0b33e1d802b1956ceaa1c6e765b48d363a9a3203691f070f7184d021d3520e8f`; Ed25519 signature valid with the release key
+- `dist/MotoSupply-POS-Installer.zip` — sha256 `349f964bb6f33f67d570e6505d10c2ace194d55823e3d0dae41b541bf498d1de`
+- `dist/MotoSupply-POS-Update.zip` — sha256 `c3c6df1e2781d64719e049f5294571a8d77a673d36d46c62e59ed6e4b9edcebf`; Ed25519 signature valid with the release key
 
 Final `tests/verify_release.sh` run on clean extractions of these ZIPs: **RELEASE VERIFIED**.
 
@@ -15,9 +15,12 @@ Final `tests/verify_release.sh` run on clean extractions of these ZIPs: **RELEAS
 | Roles on every route, CSRF, voids, branding, theme, cron URL | 36/36 | not run |
 | **New:** cashier API on a fresh ZIP install | 32/32 | not run |
 | Upgrade: real 1.2.0 → this update ZIP by hand → in-app update → restore | 31/31 | not run |
+| **New:** in-app update from the real 1.3.0 release: its own updater accepts and installs this update ZIP; data, config and backup checked; cashier API answers afterwards | 14/14 | not run |
 | Service tests / 1.3 service tests | 37/37, 47/47 | 37/37, 47/47 |
 | Updater tests | 13/13 | skipped (no `zip` extension in the test image) |
 | Folder preparation and HTTPS detection | 26/26 | 26/26 |
+
+The cashier API is served at `index.php?api=…` (code in `app/api.php`). The first 1.4.0 build had a separate `api.php` in the web root, which the 1.3.0 updater rightly rejected ("the package tries to write a file outside the application code"). The 1.3.0 in-app update test above reproduces that rejection with the first build, and passes with these packages.
 
 The Windows cashier app has its own report: `desktop/TEST_REPORT.md`.
 
