@@ -1,0 +1,11 @@
+MotoSupply POS — cashier application for Windows
+
+This application connects to your shop's MotoSupply server. It stores no passwords and no
+business data on this computer: products, prices, stock and sales are kept on the server.
+
+The application includes Electron and Chromium, which are distributed under their own open
+source licenses (MIT, BSD and others). The full license texts are installed with the application
+in the files LICENSE.electron.txt and LICENSES.chromium.html.
+
+By installing, you agree to use this software only with the MotoSupply system of the shop that
+provided it.

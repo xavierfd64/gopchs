@@ -92,6 +92,8 @@ final class ApiController
             'role' => $u['role_name'],
             'can_discount' => Auth::can('pos.discount'),
             'can_view_sales' => Auth::can('sales.view'),
+            // May change which server the desktop app uses (Settings → Store permission).
+            'can_configure' => Auth::can('settings.manage'),
         ];
     }
 
@@ -119,6 +121,23 @@ final class ApiController
     {
         Http::json(['ok' => true, 'product' => 'motosupply-pos', 'api' => 1, 'version' => MOTO_VERSION,
             'https' => Http::isHttps(), 'time' => gmdate('c')]);
+    }
+
+    /** Shop name, logo and colour for the sign-in screen (the same public branding as the website's login page). */
+    public function branding(): void
+    {
+        Http::json(['ok' => true, 'name' => Settings::get('shop_name'), 'logo' => self::logoDataUri(),
+            'theme_primary' => Settings::get('theme_primary', '#dd4a2b'), 'theme_sidebar' => Settings::get('theme_sidebar', '#1f2024')]);
+    }
+
+    private static function logoDataUri(): ?string
+    {
+        $path = Settings::get('logo_path');
+        if ($path === '' || !is_file(MOTO_ROOT . '/' . $path) || filesize(MOTO_ROOT . '/' . $path) > 1048576) {
+            return null;
+        }
+        $mime = ['png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp'][strtolower(pathinfo($path, PATHINFO_EXTENSION))] ?? null;
+        return $mime === null ? null : 'data:' . $mime . ';base64,' . base64_encode((string) file_get_contents(MOTO_ROOT . '/' . $path));
     }
 
     public function login(): void
@@ -169,14 +188,7 @@ final class ApiController
     /** Shop branding and receipt settings for the cashier screen and printed receipts. */
     public function config(): void
     {
-        $logo = null;
-        $path = Settings::get('logo_path');
-        if ($path !== '' && is_file(MOTO_ROOT . '/' . $path) && filesize(MOTO_ROOT . '/' . $path) <= 1048576) {
-            $mime = ['png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'webp' => 'image/webp'][strtolower(pathinfo($path, PATHINFO_EXTENSION))] ?? null;
-            if ($mime !== null) {
-                $logo = 'data:' . $mime . ';base64,' . base64_encode((string) file_get_contents(MOTO_ROOT . '/' . $path));
-            }
-        }
+        $logo = self::logoDataUri();
         $categories = DB::all(
             'SELECT c.id, c.name FROM categories c
               WHERE EXISTS (SELECT 1 FROM products p WHERE p.category_id = c.id AND p.is_active = 1) ORDER BY c.name'

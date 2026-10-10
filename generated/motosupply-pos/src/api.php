@@ -51,6 +51,7 @@ if (!Http::isHttps() && Http::httpsRequired()) {
 /* route => [method, HTTP method, needs token] */
 $routes = [
     'ping' => ['ping', 'GET', false],
+    'branding' => ['branding', 'GET', false],
     'auth.login' => ['login', 'POST', false],
     'auth.logout' => ['logout', 'POST', true],
     'auth.me' => ['me', 'GET', true],

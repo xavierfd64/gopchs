@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MotoSupply POS</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+{{ICONS}}
+
+<!-- First run: server address -->
+<main class="screen center-screen" id="screen-setup" hidden>
+  <section class="auth-card">
+    <div class="auth-brand"><div class="brand-mark">M</div><h1>MotoSupply POS</h1><p>Cashier app</p></div>
+    <form class="auth-form" id="setup-form" novalidate>
+      <h2>Connect to your shop</h2>
+      <p class="muted">Enter the address of your MotoSupply website. Your administrator can give it to you.</p>
+      <div class="field"><label for="server-url">Website address</label>
+        <input id="server-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://shop.example.com" maxlength="300" required></div>
+      <p class="form-error" id="setup-error" role="alert" hidden></p>
+      <button class="btn btn-primary btn-block" type="submit" id="setup-submit">Connect</button>
+      <button class="btn btn-ghost btn-block" type="button" id="setup-cancel" hidden>Cancel</button>
+    </form>
+  </section>
+</main>
+
+<!-- Sign-in -->
+<main class="screen center-screen" id="screen-login" hidden>
+  <section class="auth-card">
+    <div class="auth-brand"><img class="brand-logo" id="login-logo" alt="" hidden><div class="brand-mark" id="login-mark">M</div>
+      <h1 id="login-shop">MotoSupply</h1><p>Point of sale</p><p class="server-host" id="login-host"></p></div>
+    <form class="auth-form" id="login-form" novalidate>
+      <h2>Cashier sign-in</h2>
+      <p class="form-notice" id="login-notice" role="status" hidden></p>
+      <div class="field"><label for="login-user">Username</label>
+        <input id="login-user" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="50" required></div>
+      <div class="field"><label for="login-pass">Password</label>
+        <div class="pw-wrap"><input id="login-pass" type="password" autocomplete="current-password" maxlength="200" required>
+          <button type="button" class="pw-toggle" id="pw-toggle" aria-label="Show password" aria-pressed="false"><svg class="icon"><use href="#i-eye"/></svg></button></div></div>
+      <p class="form-error" id="login-error" role="alert" hidden></p>
+      <button class="btn btn-primary btn-block" type="submit" id="login-submit"><span>Sign in</span></button>
+      <div class="auth-foot"><span class="status-pill" data-status-pill><span class="dot"></span><span data-status-text>Connecting…</span></span>
+        <button type="button" class="btn-link" id="change-server">Server settings</button></div>
+    </form>
+  </section>
+</main>
+
+<!-- Point of sale -->
+<div class="screen pos-screen" id="screen-pos" hidden>
+  <header class="topbar">
+    <div class="tb-brand"><img class="tb-logo" id="pos-logo" alt="" hidden><div class="brand-mark small" id="pos-mark">M</div>
+      <div><strong id="pos-shop">MotoSupply</strong><small>Point of sale</small></div></div>
+    <div class="tb-actions">
+      <span class="status-pill" data-status-pill title="Connection to the MotoSupply server"><span class="dot"></span><span data-status-text>Connecting…</span></span>
+      <button class="tb-btn" id="btn-recent" title="Today's sales and reprints (F9)"><svg class="icon"><use href="#i-history"/></svg><span>Today's sales</span></button>
+      <button class="tb-btn" id="btn-printer" title="Receipt printer"><svg class="icon"><use href="#i-printer"/></svg><span>Printer</span></button>
+      <div class="tb-user"><div class="avatar" id="pos-avatar">C</div><div><strong id="pos-user">Cashier</strong><small id="pos-role">Cashier</small></div></div>
+      <button class="tb-btn danger" id="btn-logout" title="Sign out"><svg class="icon"><use href="#i-logout"/></svg><span>Sign out</span></button>
+    </div>
+  </header>
+  <div class="pos">
+    <section class="pos-products" aria-label="Products">
+      <div class="pos-search"><svg class="icon"><use href="#i-search"/></svg>
+        <label class="visually-hidden" for="search">Search product name, SKU, or scan barcode</label>
+        <input id="search" type="search" placeholder="Search name or SKU, or scan a barcode…  (F2)" autocomplete="off" spellcheck="false" maxlength="100"></div>
+      <div class="tabs" id="tabs" role="tablist" aria-label="Categories"></div>
+      <div class="list-head"><h2 id="list-title">All products</h2><span class="muted small" id="list-count" aria-live="polite"></span></div>
+      <div class="product-grid" id="grid" aria-live="polite"></div>
+    </section>
+    <aside class="pos-cart" aria-labelledby="cart-title">
+      <div class="cart-head"><h2 id="cart-title">Current sale</h2><span class="muted small" id="cart-count">0 items</span></div>
+      <div class="cart-lines" id="cart-lines"><div class="empty" id="cart-empty"><svg class="icon icon-lg"><use href="#i-cart"/></svg><p>Scan a barcode or pick a product to start a sale.</p></div></div>
+      <div class="cart-totals">
+        <p class="form-error" id="cart-error" role="alert" hidden></p>
+        <dl class="totals">
+          <div><dt>Subtotal</dt><dd id="t-subtotal">₱0.00</dd></div>
+          <div id="t-discount-row" hidden><dt><button class="btn-link" id="btn-discount" type="button">Discount (F4)</button></dt><dd id="t-discount">-₱0.00</dd></div>
+          <div class="grand"><dt>TOTAL</dt><dd id="t-total">₱0.00</dd></div>
+        </dl>
+        <button class="btn btn-primary btn-pay" id="btn-pay" disabled><span>PAY</span><kbd>F8</kbd></button>
+        <button class="btn btn-ghost btn-block" id="btn-clear" disabled><svg class="icon"><use href="#i-trash"/></svg> Cancel sale</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- Dialogs -->
+<dialog class="modal modal-keypad" id="dlg-qty" aria-labelledby="qty-title">
+  <div class="modal-body">
+    <div class="modal-head"><h2 id="qty-title">Quantity</h2><button class="icon-btn" data-close aria-label="Cancel"><svg class="icon"><use href="#i-x"/></svg></button></div>
+    <p class="kp-product" id="qty-product"></p><p class="muted small" id="qty-stock"></p>
+    <output class="kp-display" id="qty-display">0</output>
+    <p class="form-error small" id="qty-error" role="alert" hidden></p>
+    <div class="keypad" data-keypad="qty"></div>
+    <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn btn-primary" id="qty-ok">Confirm</button></div>
+  </div>
+</dialog>
+
+<dialog class="modal modal-pay" id="dlg-pay" aria-labelledby="pay-title">
+  <div class="modal-body">
+    <div class="modal-head"><h2 id="pay-title">Cash payment</h2><button class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button></div>
+    <div class="pay-grid">
+      <div>
+        <dl class="pay-summary"><div><dt>Amount due</dt><dd id="pay-due">₱0.00</dd></div></dl>
+        <label class="muted small" for="pay-display">Amount tendered</label>
+        <output class="kp-display" id="pay-display">0</output>
+        <div class="quick-cash" id="quick-cash"></div>
+        <dl class="pay-summary"><div class="change"><dt>Change</dt><dd id="pay-change">₱0.00</dd></div></dl>
+      </div>
+      <div class="keypad" data-keypad="pay"></div>
+    </div>
+    <p class="alert alert-error" id="pay-error" role="alert" hidden></p>
+    <div class="modal-actions"><button class="btn" data-close>Back to cart</button><button class="btn btn-primary" id="pay-ok">Complete sale</button></div>
+  </div>
+</dialog>
+
+<dialog class="modal" id="dlg-done" aria-labelledby="done-title">
+  <div class="modal-body">
+    <div class="done-icon"><svg class="icon icon-lg"><use href="#i-check"/></svg></div>
+    <h2 id="done-title" class="center">Sale completed</h2>
+    <p class="center muted" id="done-txn"></p>
+    <dl class="pay-summary"><div><dt>Total</dt><dd id="done-total"></dd></div><div><dt>Cash tendered</dt><dd id="done-tendered"></dd></div><div class="change"><dt>Change</dt><dd id="done-change"></dd></div></dl>
+    <p class="alert" id="done-print" role="status" hidden></p>
+    <div class="modal-actions"><button class="btn" id="done-printbtn"><svg class="icon"><use href="#i-printer"/></svg> Print receipt</button><button class="btn btn-primary" id="done-new">New sale (Enter)</button></div>
+  </div>
+</dialog>
+
+<dialog class="modal" id="dlg-discount" aria-labelledby="disc-title">
+  <div class="modal-body">
+    <div class="modal-head"><h2 id="disc-title">Discount</h2><button class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button></div>
+    <div class="seg" role="radiogroup"><button class="seg-btn is-on" data-dtype="amount" role="radio" aria-checked="true">Amount</button><button class="seg-btn" data-dtype="percent" role="radio" aria-checked="false">Percent</button></div>
+    <output class="kp-display" id="disc-display">0</output>
+    <p class="form-error small" id="disc-error" role="alert" hidden></p>
+    <div class="keypad" data-keypad="disc"></div>
+    <div class="modal-actions"><button class="btn" id="disc-remove">Remove discount</button><button class="btn btn-primary" id="disc-ok">Apply</button></div>
+  </div>
+</dialog>
+
+<dialog class="modal modal-wide" id="dlg-recent" aria-labelledby="recent-title">
+  <div class="modal-body">
+    <div class="modal-head"><h2 id="recent-title">Today's sales</h2><button class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button></div>
+    <div class="recent-list" id="recent-list"></div>
+    <p class="alert" id="recent-msg" role="status" hidden></p>
+  </div>
+</dialog>
+
+<dialog class="modal" id="dlg-printer" aria-labelledby="printer-title">
+  <div class="modal-body">
+    <div class="modal-head"><h2 id="printer-title">Receipt printer</h2><button class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button></div>
+    <p class="muted small">Receipts print on this computer's printer. Thermal receipt printers need their Windows driver with the paper size set to the roll width (58 or 80 mm).</p>
+    <div class="field"><label for="printer-select">Printer</label><select id="printer-select"></select></div>
+    <p class="muted small" id="printer-auto"></p>
+    <div class="modal-actions"><button class="btn" data-close>Close</button><button class="btn btn-primary" id="printer-save">Save</button></div>
+  </div>
+</dialog>
+
+<dialog class="modal" id="dlg-confirm" aria-labelledby="confirm-title">
+  <div class="modal-body">
+    <h2 id="confirm-title">Are you sure?</h2><p class="muted" id="confirm-text"></p>
+    <div class="modal-actions"><button class="btn" id="confirm-no">No</button><button class="btn btn-danger" id="confirm-yes">Yes</button></div>
+  </div>
+</dialog>
+
+<dialog class="modal" id="dlg-admin" aria-labelledby="admin-title">
+  <form class="modal-body" id="admin-form" novalidate>
+    <div class="modal-head"><h2 id="admin-title">Change server address</h2><button type="button" class="icon-btn" data-close aria-label="Close"><svg class="icon"><use href="#i-x"/></svg></button></div>
+    <p class="muted small" id="admin-text">An administrator account (with "Manage settings") is needed to change which server this app uses.</p>
+    <div class="field"><label for="admin-user">Administrator username</label><input id="admin-user" autocomplete="off" maxlength="50" required></div>
+    <div class="field"><label for="admin-pass">Password</label><input id="admin-pass" type="password" autocomplete="off" maxlength="200" required></div>
+    <p class="form-error" id="admin-error" role="alert" hidden></p>
+    <div class="modal-actions"><button type="button" class="btn" data-close>Cancel</button><button class="btn btn-primary" type="submit">Continue</button></div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

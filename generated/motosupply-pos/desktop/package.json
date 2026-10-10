@@ -1,0 +1,93 @@
+{
+  "name": "motosupply-pos-desktop",
+  "productName": "MotoSupply POS",
+  "version": "1.0.0",
+  "description": "MotoSupply POS cashier app for Windows",
+  "author": "MotoSupply",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "test:unit": "npm run build && node --test tests/unit/",
+    "test:e2e": "npm run build && node tests/e2e.mjs",
+    "dist:win": "npm run build && electron-builder --win nsis portable --x64",
+    "dist:linux-dir": "npm run build && electron-builder --linux dir"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "resedit": "3.1.0",
+    "typescript": "5.9.3"
+  },
+  "build": {
+    "appId": "com.motosupply.pos.cashier",
+    "productName": "MotoSupply POS",
+    "copyright": "Copyright \u00a9 2026 MotoSupply",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/main/**",
+      "dist/preload/**",
+      "dist/renderer/**",
+      "build/icon.png",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "asar": true,
+    "electronLanguages": [
+      "en-US"
+    ],
+    "afterPack": "scripts/after-pack.cjs",
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "MotoSupply-POS-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MotoSupply POS",
+      "uninstallDisplayName": "MotoSupply POS",
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "MotoSupply-POS-Setup.${ext}",
+      "license": "build/license.txt"
+    },
+    "portable": {
+      "artifactName": "MotoSupply-POS-Portable.${ext}"
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "icon": "build/icon.png",
+      "category": "Office"
+    }
+  }
+}
