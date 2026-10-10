@@ -441,7 +441,7 @@ function padPress(name: string, key: string): void {
   padValue[name] = keypadPress(padValue[name], key, name === 'qty' ? 'int' : 'money', name === 'qty' ? 4 : 9);
   $(padDisplay[name]).textContent = padValue[name] === '' ? '0' : padValue[name];
   if (name === 'qty') setError('qty-error', null);
-  if (name === 'pay') updateChange();
+  if (name === 'pay') { updateChange(); setPayError(null, $('pay-ok').textContent === 'Check and retry'); }
   if (name === 'disc') setError('disc-error', null);
 }
 
@@ -528,6 +528,7 @@ async function refreshStock(): Promise<boolean> {
   }
   const over = cart.refresh(r.products ?? []);
   renderCart();
+  if (over.length) void loadProducts(lastQuery); // show the latest stock on the product cards too
   if (over.length) {
     toast('Stock changed: ' + over.join('; ') + '. Correct the cart to continue.', 'error');
     return false;
@@ -551,7 +552,7 @@ async function openPay(): Promise<void> {
   quickCash(cart.totalCents()).forEach((c, i) => {
     const b = el('button', 'btn btn-sm', i === 0 ? 'Exact' : money(c));
     b.type = 'button';
-    b.onclick = () => { padValue.pay = (c / 100).toFixed(2); $('pay-display').textContent = padValue.pay; updateChange(); };
+    b.onclick = () => { padValue.pay = (c / 100).toFixed(2); $('pay-display').textContent = padValue.pay; updateChange(); setPayError(null, $('pay-ok').textContent === 'Check and retry'); };
     qc.appendChild(b);
   });
   setPayError(null);
@@ -606,6 +607,7 @@ async function completeSale(): Promise<void> {
     cart.refresh(r.stock);
     closeDialog('dlg-pay');
     renderCart();
+    void loadProducts(lastQuery);
     toast(errMsg(r), 'error');
     return;
   }
