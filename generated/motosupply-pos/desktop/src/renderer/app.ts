@@ -122,8 +122,27 @@ function renderStatus(s: string): void {
 
 // ------------------------------------------------------------------ setup and sign-in
 
+async function initWithRetry(): Promise<unknown> {
+  for (let i = 0; ; i++) {
+    try {
+      return await moto.init();
+    } catch (e) {
+      if (i >= 4) throw e;
+      await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    }
+  }
+}
+
 async function boot(): Promise<void> {
-  const init = (await moto.init()) as { version: string; status: string; server: { url: string | null; locked: boolean; error: string | null; configFile: string }; lastUsername: string };
+  let initRaw: unknown;
+  try {
+    initRaw = await initWithRetry();
+  } catch {
+    show('setup');
+    setError('setup-error', 'The app could not start correctly. Close it and open it again.');
+    return;
+  }
+  const init = initRaw as { version: string; status: string; server: { url: string | null; locked: boolean; error: string | null; configFile: string }; lastUsername: string };
   renderStatus(init.status);
   moto.onStatus(renderStatus);
   moto.onSession(onSessionLost);

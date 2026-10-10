@@ -102,9 +102,13 @@ const lineQty = (page, name) => page.locator('.c-line', { hasText: name }).locat
 const pdfCount = () => fs.readdirSync(PDFS).filter((f) => f.endsWith('.pdf')).length;
 
 // Proxy between the app and the server, to simulate network problems.
-const proxy = { mode: 'pass', port: 0 };
+const proxy = { mode: 'pass', port: 0, sockets: new Set() };
+// Switching to "down" also cuts the app's open keep-alive connections, like a real network failure.
+const setProxy = (mode) => { proxy.mode = mode; if (mode === 'down') for (const s of proxy.sockets) s.destroy(); };
 const [srvHost, srvPort] = new URL(SERVER).host.split(':');
 const proxyServer = net.createServer((client) => {
+  proxy.sockets.add(client);
+  client.on('close', () => proxy.sockets.delete(client));
   if (proxy.mode === 'down') return client.destroy();
   const up = net.connect(Number(srvPort || 80), srvHost);
   let req = '';
@@ -127,18 +131,15 @@ const ud1 = path.join(WORK, 'user1');
 let { app, page, errors } = await launch(ud1);
 
 await step('Security: no Node.js in the screen, only the fixed bridge; no navigation or pop-ups', async () => {
+  await page.waitForSelector('#screen-setup:not([hidden])');
   assert(await page.evaluate(() => typeof require === 'undefined' && typeof process === 'undefined'), 'no Node globals');
   const keys = await page.evaluate(() => Object.keys(window.moto).sort().join(','));
   assert(keys === 'authorizeServerChange,branding,cartState,checkServer,checkout,discardPending,init,login,logout,lookup,onSession,onStatus,print,printers,receipt,recent,reprint,search,setPrinter,stock', keys);
-  const before = page.url();
-  await page.evaluate(() => { location.href = 'https://example.com/'; });
-  await sleep(500);
-  assert(page.url() === before, 'navigation blocked: ' + page.url());
   assert(await page.evaluate(() => window.open('https://example.com') === null), 'window.open blocked');
   const fetched = await page.evaluate(() => fetch('https://example.com').then(() => 'loaded', () => 'blocked'));
   assert(fetched === 'blocked', 'network from the screen is blocked');
-  const ipcBlocked = await app.evaluate(({ ipcMain }) => typeof ipcMain.listenerCount === 'function');
-  assert(ipcBlocked, 'main reachable');
+  assert((await app.windows()).length === 1, 'no extra windows');
+  // (Navigation away from the app is tested last: Playwright keeps waiting after a cancelled navigation.)
 });
 
 await step('First run: server address is validated (HTTPS required, must be a MotoSupply server)', async () => {
@@ -418,7 +419,7 @@ await step('Server unreachable: status shows "No connection" and checkout fails 
   await page.keyboard.press('F8');
   await page.waitForSelector('#dlg-pay[open]');
   await page.click('#quick-cash button:first-child');
-  proxy.mode = 'down';
+  setProxy('down');
   const before = salesCount();
   await page.click('#pay-ok');
   await page.waitForSelector('#pay-error:not([hidden])');
@@ -431,7 +432,7 @@ await step('Server unreachable: status shows "No connection" and checkout fails 
 });
 
 await step('Answer lost after the server saved the sale: "Check and retry" shows it, no duplicate', async () => {
-  proxy.mode = 'drop-checkout';
+  setProxy('drop-checkout');
   const before = { sales: salesCount(), stock: stock(P.ngk) };
   await page.click('#pay-ok');
   await page.waitForSelector('#pay-error:not([hidden])');
@@ -439,7 +440,7 @@ await step('Answer lost after the server saved the sale: "Check and retry" shows
   assert((await page.textContent('#pay-ok')) === 'Check and retry');
   assert(salesCount() === before.sales + 1, 'server committed the sale');
   await page.screenshot({ path: `${SHOTS}/12-unknown-outcome.png` });
-  proxy.mode = 'pass';
+  setProxy('pass');
   await page.click('#pay-ok');
   await page.waitForSelector('#dlg-done[open]');
   assert((await page.textContent('#done-print')).includes('not charged twice'));
@@ -454,11 +455,11 @@ await step('App closed while the outcome was unknown: next sign-in reports the s
   await page.keyboard.press('F8');
   await page.waitForSelector('#dlg-pay[open]');
   await page.click('#quick-cash button:first-child');
-  proxy.mode = 'drop-checkout';
+  setProxy('drop-checkout');
   const before = salesCount();
   await page.click('#pay-ok');
   await page.waitForSelector('#pay-error:not([hidden])');
-  proxy.mode = 'pass';
+  setProxy('pass');
   await app.evaluate(({ app: a }) => a.exit(0)); // crash-like exit, no clean-up
   ({ app, page, errors } = await launch(ud2));
   await page.waitForSelector('#screen-login:not([hidden])');
@@ -471,7 +472,7 @@ await step('App closed while the outcome was unknown: next sign-in reports the s
 await app.close();
 
 // ================================================================ locked machine configuration
-await step('Administrator-locked server address: no setup screen, no server change option', async () => {
+await step('Administrator-locked server address: no setup screen, no server change; navigation away is blocked', async () => {
   const cfg = path.join(WORK, 'machine.json');
   fs.writeFileSync(cfg, JSON.stringify({ server_url: SERVER }));
   const l = await launch(path.join(WORK, 'user3'), { MOTOSUPPLY_MACHINE_CONFIG: cfg });
@@ -479,6 +480,11 @@ await step('Administrator-locked server address: no setup screen, no server chan
   assert(await l.page.isHidden('#change-server'), 'no server settings link');
   const r = await l.page.evaluate(() => window.moto.checkServer('http://127.0.0.1:8090'));
   assert(r.ok === false && r.error.code === 'locked', JSON.stringify(r));
+  const before = l.page.url();
+  await l.page.evaluate(() => { location.href = 'https://example.com/'; });
+  await sleep(800);
+  assert(l.page.url() === before, 'navigation away from the app is blocked: ' + l.page.url());
+  assert(await l.page.evaluate(() => !document.querySelector('#screen-login').hidden), 'screen intact');
   await l.app.close();
 });
 
