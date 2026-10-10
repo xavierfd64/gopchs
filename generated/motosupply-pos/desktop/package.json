@@ -88,6 +88,11 @@
       ],
       "icon": "build/icon.png",
       "category": "Office"
-    }
+    },
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xavierfd64/gopchs.git"
   }
 }
