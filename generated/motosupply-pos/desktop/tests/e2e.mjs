@@ -118,7 +118,8 @@ const proxyServer = net.createServer((client) => {
     if (proxy.mode === 'drop-checkout' && req.includes('r=sales.checkout')) drop = true;
     up.write(d);
   });
-  up.on('data', (d) => { if (!drop) client.write(d); });
+  // In drop mode the server has already committed when its answer starts: cut the line right then.
+  up.on('data', (d) => { if (drop) { client.destroy(); up.destroy(); } else client.write(d); });
   up.on('end', () => (drop ? client.destroy() : client.end()));
   up.on('error', () => client.destroy());
   client.on('error', () => up.destroy());
@@ -400,7 +401,8 @@ await step('Different window sizes: no horizontal overflow; total and Pay stay v
 });
 
 await step('No errors in the screen\'s console', async () => {
-  const relevant = errors.filter((e) => !/status of 4\d\d/.test(e));
+  // The blocked fetch in the security test is expected to log a Content-Security-Policy violation.
+  const relevant = errors.filter((e) => !/status of 4\d\d/.test(e) && !/example\.com/.test(e));
   assert(relevant.length === 0, relevant.join(' | '));
 });
 await app.close();
