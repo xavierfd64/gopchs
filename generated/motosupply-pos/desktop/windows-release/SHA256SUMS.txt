@@ -1,0 +1,2 @@
+8ab0587bd5360cd0780520b4b741bf286be3c6032f28c40338711ea87d633573  MotoSupply-POS-Setup.exe
+45f72db6bc49e2ef2aa844b89eb65cb61a4e0fd3c180952bd8f4b931c272112f  MotoSupply-POS-Portable.exe
