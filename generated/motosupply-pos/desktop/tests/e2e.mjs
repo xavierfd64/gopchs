@@ -129,7 +129,7 @@ let { app, page, errors } = await launch(ud1);
 await step('Security: no Node.js in the screen, only the fixed bridge; no navigation or pop-ups', async () => {
   assert(await page.evaluate(() => typeof require === 'undefined' && typeof process === 'undefined'), 'no Node globals');
   const keys = await page.evaluate(() => Object.keys(window.moto).sort().join(','));
-  assert(keys === 'authorizeServerChange,branding,cartState,checkServer,checkout,discardPending,init,login,logout,lookup,onSession,onStatus,print,printers,recent,receipt,reprint,search,setPrinter,stock', keys);
+  assert(keys === 'authorizeServerChange,branding,cartState,checkServer,checkout,discardPending,init,login,logout,lookup,onSession,onStatus,print,printers,receipt,recent,reprint,search,setPrinter,stock', keys);
   const before = page.url();
   await page.evaluate(() => { location.href = 'https://example.com/'; });
   await sleep(500);
@@ -259,7 +259,13 @@ await step('Quantity keypad: digits, backspace, clear, stock limit, cancel and p
   await page.screenshot({ path: `${SHOTS}/04-keypad.png` });
 });
 
+const clearSearch = async () => {
+  await page.fill('#search', '');
+  await page.press('#search', 'Escape');
+  await page.waitForSelector('.p-card[aria-label^="Add NGK"]');
+};
 await step('Cart totals: line totals, subtotal, plus/minus and remove', async () => {
+  await clearSearch();
   await page.click('.p-card[aria-label^="Add NGK"]');
   await page.click('.c-line:has-text("NGK") button[aria-label^="Increase"]');
   assert((await page.textContent('#t-subtotal')) === '₱7,990.00', await page.textContent('#t-subtotal')); // 15×450 + 2×620
@@ -306,6 +312,7 @@ await step('Payment: short payment refused, change calculated, sale saved once, 
 });
 
 await step('Stock changed meanwhile: cashier must correct the cart; nothing is deducted', async () => {
+  await clearSearch();
   await page.click('.p-card[aria-label^="Add Shell"]');
   await page.click('.c-line .qty-value');
   await page.keyboard.type('3');
@@ -386,6 +393,9 @@ await step('Different window sizes: no horizontal overflow; total and Pay stay v
     await page.screenshot({ path: `${SHOTS}/10-size-${w}x${h}.png` });
   }
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].maximize());
+  await page.click('#btn-clear');
+  await page.click('#confirm-yes');
+  await page.waitForSelector('.c-line', { state: 'detached' });
 });
 
 await step('No errors in the screen\'s console', async () => {
