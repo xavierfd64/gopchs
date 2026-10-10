@@ -16,7 +16,8 @@ You never need to edit files, import SQL, or use Composer, npm, Node.js or a ter
   - Sales History with supervisor-approved voids, Reports (PDF and CSV), end-of-day email reports.
   - Users with roles and per-user permissions, an audit log.
   - Receipt printing settings, logo and theme colours, and an in-app updater for signed update packages.
-- **Version:** 1.3.0. See `CHANGELOG.md`. Updating from 1.0–1.2: see [Updating](#updating-to-a-new-version).
+- **Version:** 1.4.0. See `CHANGELOG.md`. Updating from 1.0–1.3: see [Updating](#updating-to-a-new-version).
+- **Windows cashier app:** optional desktop app for the shop counter (`MotoSupply-POS-Setup.exe`). See [Windows cashier app](#windows-cashier-app).
 
 > The names below (`sql123.infinityfree.com`, `if0_12345678`, …) are **examples**. Always use the values from your own hosting control panel.
 
@@ -162,6 +163,20 @@ The installer is now **locked**. It cannot run again, and it can never reset you
 
 ---
 
+## Windows cashier app
+
+From 1.4.0, cashiers can use the **MotoSupply POS** Windows app at the counter, instead of a browser. Administration stays on this website.
+
+- **Install:** `MotoSupply-POS-Setup.exe` on the counter PC. It installs for the current Windows user, no administrator rights needed.
+- **Connect:** on first start, enter this website's **https://** address. To lock the address for all users, create `C:\ProgramData\MotoSupply POS\config.json` with `{ "server_url": "https://your-site" }`.
+- **Sign in:** cashiers use their normal accounts. Only active accounts with the "Use the POS" and "Record sales" permissions can sign in.
+- **What the website controls:** prices, stock, totals and permissions (rechecked on every request), and the receipt settings (paper, logo, automatic printing) in Settings → Receipt & printing.
+- **Server side:** the app talks only to `api.php` on this website, over HTTPS (required once "Require HTTPS" is on). Sign-in tokens last 30 minutes without use, 12 hours at most. They end at sign-out, deactivation or a password change, and only their hash is stored.
+
+Full instructions: `desktop/README.md` (included with the app download).
+
+---
+
 ## Common installation problems
 
 | What you see | What to do |
@@ -240,7 +255,7 @@ Updates come as **`MotoSupply-POS-Update.zip`**. It contains only application co
 1. **Back up** (see [Backups](#backups)). Download the database with phpMyAdmin → Export.
 2. Unzip `MotoSupply-POS-Update.zip` on your computer.
 3. Upload its contents into your MotoSupply folder, replacing existing files. The ZIP has no `install/`, `config/`, `storage/` or `uploads/` content, so your settings, data and images stay.
-4. Open MotoSupply. On the first visit it backs up the database to `storage/backups/` and then applies the 1.3 database update. If the backup cannot be written, nothing is changed and the page says how to fix the folder permission.
+4. Open MotoSupply. On the first visit it backs up the database to `storage/backups/` and then applies the database updates. If the backup cannot be written, nothing is changed and the page says how to fix the folder permission.
 5. Sign in with your usual account. Existing accounts become **Administrators**.
 6. Recommended next steps:
    - set your void approval PIN in **My Account**;

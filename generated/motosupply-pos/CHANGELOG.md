@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.4.0] — 2026-10-10
+
+### Added
+- **Cashier API (`api.php`)** for the new MotoSupply POS Windows cashier app. It only offers cashier operations:
+  - sign in and out;
+  - product search, barcode lookup and current stock;
+  - checkout;
+  - receipts and reprints;
+  - shop branding and receipt settings.
+- **Short-lived sign-in tokens:**
+  - Only a SHA-256 hash is stored.
+  - They expire after 30 minutes without use and after 12 hours at most, with a per-token request limit.
+  - They are revoked at sign-out, deactivation, password change or password reset.
+- **Server-side permission checks** on every request. Only active accounts with "Use the POS" and "Record sales" can sign in.
+- **Checkout** uses the same transaction as the web POS: row locks, server prices, stock checks, and idempotent retries.
+- **Checkout status by transaction token**, for answers lost to a network failure or crash.
+- **HTTPS is required** for `api.php` in production mode. It sets no cookies and no sessions.
+- Migration 003 (`api_tokens`).
+
+### Changed
+- `api.php` is part of the update package and of the required files.
+- The `Authorization` header is passed to PHP on CGI/FastCGI hosts (`.htaccess`).
+
 ## [1.3.0] — 2026-10-09
 
 ### Fixed

@@ -1,6 +1,6 @@
 # Updating MotoSupply POS with MotoSupply-POS-Update.zip
 
-This package updates an existing MotoSupply installation to version 1.3.0.
+This package updates an existing MotoSupply installation to version 1.4.0.
 
 **It contains:**
 - application code only: `app/`, `assets/`, `database/migrations/`, `index.php`, and the security `.htaccess` files;
