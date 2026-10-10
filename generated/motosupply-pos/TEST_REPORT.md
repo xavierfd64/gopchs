@@ -1,4 +1,31 @@
-# Test report — MotoSupply POS 1.3.0
+# Test report — MotoSupply POS 1.4.0 (adds the cashier API for the Windows app)
+
+**Packages:**
+- `dist/MotoSupply-POS-Installer.zip` — sha256 `111a6d9e4769a763bb2609d737c9eaf6f09e9dd388881fce9ac8520f460d4223`
+- `dist/MotoSupply-POS-Update.zip` — sha256 `0b33e1d802b1956ceaa1c6e765b48d363a9a3203691f070f7184d021d3520e8f`; Ed25519 signature valid with the release key
+
+Final `tests/verify_release.sh` run on clean extractions of these ZIPs: **RELEASE VERIFIED**.
+
+| Suite | PHP 8.3.6 | PHP 8.4.26 |
+|---|---|---|
+| Installer wizard (subfolder / root / unwritable folders) | 21/21, 21/21 | 21/21 |
+| App end-to-end in a browser (subfolder / root) | 34/34, 34/34 | 34/34 |
+| HTTP security | 17/17, 17/17 | 17/17 |
+| HTTPS production mode | — | 7/7 |
+| Roles on every route, CSRF, voids, branding, theme, cron URL | 36/36 | not run |
+| **New:** cashier API (`api.php`) on a fresh ZIP install | 32/32 | not run |
+| Upgrade: real 1.2.0 → this update ZIP by hand → in-app update → restore | 31/31 | not run |
+| Service tests / 1.3 service tests | 37/37, 47/47 | 37/37, 47/47 |
+| Updater tests | 13/13 | skipped (no `zip` extension in the test image) |
+| Folder preparation and HTTPS detection | 26/26 | 26/26 |
+
+The Windows cashier app has its own report: `desktop/TEST_REPORT.md`.
+
+The 1.3.0 report follows unchanged.
+
+---
+
+# Test report — MotoSupply POS 1.3.0 (previous release)
 
 **Packages tested:**
 - `dist/MotoSupply-POS-Installer.zip` (sha256 `353e1bffd03bcd830dca51643b0b6cfe076696d1d60da1e157ea00a2859572f5`)
