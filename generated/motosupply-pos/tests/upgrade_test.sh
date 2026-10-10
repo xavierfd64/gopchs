@@ -9,6 +9,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 B="${1:-http://127.0.0.1:8090/up12}"; W="${2:-/var/www/mototest/up12}"; DB=moto_up12
 PW='Moto!Counter2026'; pass=0; fail=0
+CUR="$(grep -oP "const MOTO_VERSION = '\K[^']+" "$HERE/src/app/bootstrap.php")"           # version in the update package
+NEXT="$(echo "$CUR" | awk -F. '{print $1"."$2"."$3+1}')"; OLDER="$(echo "$CUR" | awk -F. '{print $1"."$2-1".9"}')"
 check() { if [ "$2" = "$3" ]; then echo "  PASS  $1"; pass=$((pass+1)); else echo "  FAIL  $1 (expected '$2', got '$3')"; fail=$((fail+1)); fi; }
 q() { mysql -N -B "$DB" -e "$1"; }
 CJ="$(mktemp)"; WORK="$(mktemp -d)"; trap 'rm -rf "$CJ" "$WORK"' EXIT
@@ -45,7 +47,7 @@ check "config.php untouched by the update files" "$CONF_BEFORE" "$(md5sum < "$W/
 check "extracted files are not world-writable" "0" "$(find "$W" -type f -perm -o+w | wc -l | tr -d ' ')"
 sleep 3 # PHP opcache re-checks changed files every 2 s (opcache.revalidate_freq); a person takes longer than that
 check "first visit after upload" "200" "$(curl -s -o /dev/null -w '%{http_code}' "$B/index.php?r=login")"
-check "schema migrated to version 2" "2" "$(q 'SELECT MAX(version) FROM schema_migrations')"
+check "schema migrated to the latest version" "$(ls "$HERE"/src/database/migrations/ | grep -cE '^[0-9]{3}_')" "$(q 'SELECT MAX(version) FROM schema_migrations')"
 check "database backed up before migrating" "1" "$(ls "$W"/storage/backups/*before-migration*.sql* 2>/dev/null | wc -l | tr -d ' ')"
 check "backup is a complete dump" "1" "$(zcat "$W"/storage/backups/*before-migration*.sql.gz | grep -c 'CREATE TABLE `products`')"
 check "all tables InnoDB" "0" "$(q "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB' AND engine <> 'InnoDB'")"
@@ -56,38 +58,38 @@ login
 check "admin signs in with the same password" "200" "$(curl -s -o /dev/null -w '%{http_code}' -b "$CJ" "$B/index.php?r=dashboard")"
 curl -s -b "$CJ" "$B/index.php?r=inventory.integrity" > "$WORK/integrity.html"
 check "integrity page lists the negative product" "1" "$(grep -c 'UPG-3' "$WORK/integrity.html" | awk '{print ($1>0)}')"
-check "version shown is 1.3.0" "1" "$(curl -s -b "$CJ" "$B/index.php?r=updates" | grep -c 'Installed version: <strong>1.3.0')"
+check "version shown is $CUR" "1" "$(curl -s -b "$CJ" "$B/index.php?r=updates" | grep -c "Installed version: <strong>$CUR")"
 check "old installer stays locked (no error)" "1" "$(curl -s "$B/install/" | grep -ciE 'already installed|installation is locked|already been installed' | awk '{print ($1>0)}')"
 for f in motosupply-update.json motosupply-update.sig UPDATE-README.md CHANGELOG.md; do
   check "$f is not served" "403" "$(curl -s -o /dev/null -w '%{http_code}' "$B/$f")"
 done
 check "no PHP errors in the app log" "0" "$(grep -hc 'ERROR' "$W"/storage/logs/*.log 2>/dev/null | awk '{s+=$1} END {print s+0}')"
 
-echo "== In-app updater over HTTP (test package 1.3.1 signed with a throwaway key)"
+echo "== In-app updater over HTTP (test package $NEXT signed with a throwaway key)"
 php -r '$k = sodium_crypto_sign_keypair(); file_put_contents($argv[1], base64_encode(sodium_crypto_sign_secretkey($k))); echo base64_encode(sodium_crypto_sign_publickey($k));' "$WORK/test.key" > "$WORK/test.pub"
-php "$HERE/tools/build-update.php" --key="$WORK/test.key" --src="$HERE/src" --out="$WORK/update-131.zip" --version=1.3.1 >/dev/null
+php "$HERE/tools/build-update.php" --key="$WORK/test.key" --src="$HERE/src" --out="$WORK/update-next.zip" --version=$NEXT >/dev/null
 sed -i -E "s/^return (\[|array \()/return \1\n  'update_trusted_keys' => ['$(cat "$WORK/test.pub" | sed 's/[\/&]/\\&/g')'],/" "$W/config/config.php"
 check "test key trusted by this site only" "1" "$(grep -c update_trusted_keys "$W/config/config.php")"
 sleep 3 # opcache revalidation of the edited config file
 T=$(tok updates)
-curl -s -o /dev/null -b "$CJ" -c "$CJ" -F "_csrf=$T" -F "package=@$WORK/update-131.zip;type=application/zip" "$B/index.php?r=updates.upload"
+curl -s -o /dev/null -b "$CJ" -c "$CJ" -F "_csrf=$T" -F "package=@$WORK/update-next.zip;type=application/zip" "$B/index.php?r=updates.upload"
 PAGE=$(curl -s -b "$CJ" -c "$CJ" "$B/index.php?r=updates")
-check "package verified and summarised" "1" "$(echo "$PAGE" | grep -c 'Ready to install version 1.3.1')"
+check "package verified and summarised" "1" "$(echo "$PAGE" | grep -c "Ready to install version $NEXT")"
 UT=$(echo "$PAGE" | grep -oP 'name="token" value="\K[a-f0-9]{32}' | head -1); T=$(echo "$PAGE" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
 curl -s -o /dev/null -b "$CJ" -c "$CJ" -X POST --data-urlencode "_csrf=$T" -d "token=$UT&confirm=1" "$B/index.php?r=updates.apply"
 PAGE=$(curl -s -b "$CJ" -c "$CJ" "$B/index.php?r=updates")
 check "update finished" "1" "$(echo "$PAGE" | grep -c 'Update finished.')"
-check "now running 1.3.1" "1" "$(echo "$PAGE" | grep -c 'Installed version: <strong>1.3.1')"
+check "now running $NEXT" "1" "$(echo "$PAGE" | grep -c "Installed version: <strong>$NEXT")"
 check "data unchanged by the in-app update" "$BEFORE" "$(fingerprint)"
 check "backup folder with database and files" "2" "$(ls "$W"/storage/backups/update-*/ | grep -cE '^(database.sql.gz|files.zip)$')"
 check "maintenance mode ended" "0" "$(ls "$W/storage/maintenance.flag" 2>/dev/null | wc -l | tr -d ' ')"
 HID=$(q "SELECT id FROM update_history ORDER BY id DESC LIMIT 1")
 T=$(echo "$PAGE" | grep -oP 'name="_csrf" value="\K[^"]+' | head -1)
 curl -s -o /dev/null -b "$CJ" -c "$CJ" -X POST --data-urlencode "_csrf=$T" -d "id=$HID&confirm=1" "$B/index.php?r=updates.rollback"
-check "previous files restored (1.3.0)" "1" "$(curl -s -b "$CJ" "$B/index.php?r=updates" | grep -c 'Installed version: <strong>1.3.0')"
+check "previous files restored ($CUR)" "1" "$(curl -s -b "$CJ" "$B/index.php?r=updates" | grep -c "Installed version: <strong>$CUR")"
 check "data unchanged after restore" "$BEFORE" "$(fingerprint)"
 check "update and restore recorded in the audit log" "1" "$(q "SELECT COUNT(DISTINCT action) >= 2 FROM audit_log WHERE action LIKE 'system.update%'")"
-check "downgrade package refused" "1" "$(php "$HERE/tools/build-update.php" --key="$WORK/test.key" --src="$HERE/src" --out="$WORK/old.zip" --version=1.2.9 >/dev/null; T=$(tok updates); curl -s -o /dev/null -b "$CJ" -c "$CJ" -F "_csrf=$T" -F "package=@$WORK/old.zip;type=application/zip" "$B/index.php?r=updates.upload"; curl -s -b "$CJ" "$B/index.php?r=updates" | grep -c 'Downgrades are not allowed')"
+check "downgrade package refused" "1" "$(php "$HERE/tools/build-update.php" --key="$WORK/test.key" --src="$HERE/src" --out="$WORK/old.zip" --version=$OLDER >/dev/null; T=$(tok updates); curl -s -o /dev/null -b "$CJ" -c "$CJ" -F "_csrf=$T" -F "package=@$WORK/old.zip;type=application/zip" "$B/index.php?r=updates.upload"; curl -s -b "$CJ" "$B/index.php?r=updates" | grep -c 'Downgrades are not allowed')"
 
 echo; echo "$pass passed, $fail failed"
 [ $fail -eq 0 ]

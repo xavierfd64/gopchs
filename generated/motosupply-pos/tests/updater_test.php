@@ -24,6 +24,12 @@ use App\Core\DB;
 use App\Services\Backup;
 use App\Services\Updater;
 
+// Test package versions relative to the code being tested.
+[$vMaj, $vMin, $vPat] = array_map('intval', explode('.', MOTO_VERSION));
+define('NEXT1', "$vMaj.$vMin." . ($vPat + 1));
+define('NEXT2', "$vMaj.$vMin." . ($vPat + 2));
+define('OLDER', "$vMaj." . max(0, $vMin - 1) . '.9');
+
 $keys = sodium_crypto_sign_keypair();
 $secret = sodium_crypto_sign_secretkey($keys);
 $public = base64_encode(sodium_crypto_sign_publickey($keys));
@@ -75,7 +81,7 @@ $craft = static function (array $manifest, array $entries, ?string $signKey = nu
     $zip->close();
     return $out;
 };
-$manifest = static fn (array $files, string $version = '1.3.1', array $more = []): array => [
+$manifest = static fn (array $files, string $version = NEXT1, array $more = []): array => [
     'product' => 'motosupply-pos', 'type' => 'update', 'version' => $version,
     'files' => array_map(static fn ($d) => hash('sha256', $d), $files),
 ] + $more;
@@ -83,12 +89,12 @@ $version = static fn (): string => preg_match("/const MOTO_VERSION = '([^']+)'/"
 
 echo "\nPackage validation\n";
 test('A correctly signed newer package passes inspection and lists what changes', function () use ($build) {
-    $pkg = $build('1.3.1', ['database/migrations/003_test_addition.php' => "<?php\nreturn static function (PDO \$pdo): void { \$pdo->exec('CREATE TABLE IF NOT EXISTS upd_test (id INT PRIMARY KEY) ENGINE=InnoDB'); };\n"]);
+    $pkg = $build(NEXT1, ['database/migrations/090_test_addition.php' => "<?php\nreturn static function (PDO \$pdo): void { \$pdo->exec('CREATE TABLE IF NOT EXISTS upd_test (id INT PRIMARY KEY) ENGINE=InnoDB'); };\n"]);
     $i = Updater::inspect($pkg);
-    eq('1.3.1', $i['version']);
+    eq(NEXT1, $i['version']);
     eq(MOTO_VERSION, $i['from']);
     ok($i['changed'] >= 1, 'bootstrap.php changes');
-    eq(['database/migrations/003_test_addition.php'], $i['migrations']);
+    eq(['database/migrations/090_test_addition.php'], $i['migrations']);
     $names = [];
     $z = new ZipArchive();
     $z->open($pkg);
@@ -138,7 +144,7 @@ test('A signed package cannot overwrite config, uploads, storage or the installe
 });
 test('Downgrades and same-version packages are rejected', function () use ($craft, $manifest) {
     $files = ['app/x.php' => '<?php'];
-    throws(RuntimeException::class, fn () => Updater::inspect($craft($manifest($files, '1.2.9'), $files)), 'Downgrades');
+    throws(RuntimeException::class, fn () => Updater::inspect($craft($manifest($files, OLDER), $files)), 'Downgrades');
     throws(RuntimeException::class, fn () => Updater::inspect($craft($manifest($files, MOTO_VERSION), $files)), 'not newer');
 });
 test('A fresh-install ZIP or random ZIP is not accepted as an update', function () use ($work) {
@@ -156,7 +162,7 @@ echo "\nInstall, backup, rollback\n";
 test('Valid update installs files and migrations, keeps data/config/uploads, makes backups', function () use ($before, $fingerprint, $version) {
     $r = Updater::apply($GLOBALS['goodPkg'], 1);
     ok($r['ok'], implode(' | ', $r['log']));
-    eq('1.3.1', $version());
+    eq(NEXT1, $version());
     ok((bool) DB::value("SHOW TABLES LIKE 'upd_test'"), 'migration 003 applied');
     eq($before, $fingerprint(), 'products, users, sales, config and uploads unchanged');
     $h = DB::one('SELECT * FROM update_history WHERE id = ?', [$r['history_id']]);
@@ -182,20 +188,20 @@ test('The database backup restores to an identical copy', function () use ($db) 
     DB::pdo()->exec("DROP DATABASE `$copy`");
 });
 test('Rollback restores the previous files and removes files the update added', function () use ($before, $fingerprint, $version) {
-    ok(is_file(MOTO_ROOT . '/database/migrations/003_test_addition.php'));
+    ok(is_file(MOTO_ROOT . '/database/migrations/090_test_addition.php'));
     $r = Updater::rollback($GLOBALS['historyId']);
     eq(MOTO_VERSION, $version());
-    ok(!is_file(MOTO_ROOT . '/database/migrations/003_test_addition.php'), 'added migration file removed');
+    ok(!is_file(MOTO_ROOT . '/database/migrations/090_test_addition.php'), 'added migration file removed');
     eq('rolled_back', DB::value('SELECT status FROM update_history WHERE id = ?', [$GLOBALS['historyId']]));
     eq($before, $fingerprint());
 });
 test('A failing migration triggers automatic restore of the previous files', function () use ($build, $before, $fingerprint, $version) {
-    $pkg = $build('1.3.2', ['database/migrations/004_broken.php' => "<?php\nreturn static function (PDO \$pdo): void { throw new RuntimeException('boom'); };\n"]);
+    $pkg = $build(NEXT2, ['database/migrations/091_broken.php' => "<?php\nreturn static function (PDO \$pdo): void { throw new RuntimeException('boom'); };\n"]);
     $r = Updater::apply($pkg, 1);
     ok(!$r['ok']);
     ok(str_contains(implode(' ', $r['log']), 'restored automatically'), implode(' | ', $r['log']));
     eq(MOTO_VERSION, $version(), 'previous version back');
-    ok(!is_file(MOTO_ROOT . '/database/migrations/004_broken.php'), 'added files removed');
+    ok(!is_file(MOTO_ROOT . '/database/migrations/091_broken.php'), 'added files removed');
     eq('failed', DB::value('SELECT status FROM update_history WHERE id = ?', [$r['history_id']]));
     eq($before, $fingerprint());
     ok(!is_file(MOTO_ROOT . '/storage/maintenance.flag'));

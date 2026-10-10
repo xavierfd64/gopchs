@@ -15,10 +15,10 @@ echo "== Package"
 unzip -tq "$ZIP" && echo "ZIP integrity OK"
 CLEAN="$OUT/clean"; rm -rf "$CLEAN"; mkdir -p "$CLEAN"; (cd "$CLEAN" && unzip -q "$ZIP")
 echo "files: $(find "$CLEAN" -type f | wc -l)"
-for f in index.php .htaccess install/index.php README.md INSTALLATION-CHECKLIST.md CHANGELOG.md database/migrations/001_initial_schema.sql database/migrations/002_permissions_audit_integrity.php config/config.sample.php; do [ -f "$CLEAN/$f" ] || { echo "MISSING $f"; status=1; }; done
+for f in index.php .htaccess install/index.php README.md INSTALLATION-CHECKLIST.md CHANGELOG.md database/migrations/001_initial_schema.sql database/migrations/002_permissions_audit_integrity.php database/migrations/003_api_tokens.php api.php config/config.sample.php; do [ -f "$CLEAN/$f" ] || { echo "MISSING $f"; status=1; }; done
 for f in config/config.php storage/installed.lock .env storage/backups uploads/branding; do [ -e "$CLEAN/$f" ] && { echo "UNEXPECTED $f"; status=1; }; done
 find "$CLEAN" \( -name '*.key' -o -name 'release.*' -o -name '*.sql.gz' \) | grep . && { echo "UNEXPECTED key or dump"; status=1; }
-grep -q "MOTO_VERSION = '1.3.0'" "$CLEAN/app/bootstrap.php" && echo "installer version 1.3.0" || { echo "WRONG VERSION"; status=1; }
+grep -q "MOTO_VERSION = '1.4.0'" "$CLEAN/app/bootstrap.php" && echo "installer version 1.4.0" || { echo "WRONG VERSION"; status=1; }
 
 echo "== Update package"
 unzip -tq "$UPD" && echo "ZIP integrity OK"
@@ -62,8 +62,13 @@ H=/var/www/mototest/h13; rm -rf "$H"; mkdir -p "$H"; (cd "$H" && unzip -q "$ZIP"
 bash "$HERE/tests/fresh_install.sh" http://127.0.0.1:8090/h13 moto_h13 admin 'Moto!Counter2026' > /dev/null
 run "http tests 1.3 (php 8.3)" php "$HERE/tests/http_v13.php" http://127.0.0.1:8090/h13 moto_h13 admin 'Moto!Counter2026' https://127.0.0.1:8443/h13 "$H"
 
+echo "== Cashier desktop API (api.php) on a fresh install from the ZIP"
+A=/var/www/mototest/api14; rm -rf "$A"; mkdir -p "$A"; (cd "$A" && unzip -q "$ZIP"); chown -R www-data:www-data "$A"
+bash "$HERE/tests/fresh_install.sh" http://127.0.0.1:8090/api14 moto_api14 admin 'Moto!Counter2026' > /dev/null
+run "cashier API (php 8.3)" php "$HERE/tests/api_test.php" http://127.0.0.1:8090/api14 moto_api14 https://127.0.0.1:8443/api14
+
 echo "== Upgrade: real 1.2.0 release + MotoSupply-POS-Update.zip uploaded by hand, then the in-app updater"
-run "upgrade 1.2.0 -> 1.3.0 (php 8.3)" "$HERE/tests/upgrade_test.sh" http://127.0.0.1:8090/up12 /var/www/mototest/up12
+run "upgrade 1.2.0 -> 1.4.0 (php 8.3)" "$HERE/tests/upgrade_test.sh" http://127.0.0.1:8090/up12 /var/www/mototest/up12
 
 echo "== Service tests (PHP 8.3)"
 run "service tests" php "$HERE/tests/run.php"
