@@ -2,15 +2,18 @@
 declare(strict_types=1);
 
 /*
- * MotoSupply POS — JSON API for the cashier desktop app:  api.php?r=<route>
+ * MotoSupply POS — JSON API for the cashier desktop app:  index.php?api=<route>
+ *
+ * Included by index.php before any session or cookie handling. (The API lives behind
+ * index.php rather than in its own root file so that the update package contains only files
+ * that MotoSupply 1.3's updater accepts.)
  *
  * No cookies or sessions: requests carry a short-lived bearer token (see ApiTokens).
  * In production mode (Settings → System Check → Require HTTPS) plain HTTP is refused.
  * Only cashier operations exist here; administration stays in the web application.
  */
 
-define('MOTO_ROOT', __DIR__);
-require MOTO_ROOT . '/app/bootstrap.php';
+defined('MOTO_ROOT') || exit;
 
 use App\Controllers\ApiController;
 use App\Core\Config;
@@ -64,7 +67,7 @@ $routes = [
     'sales.receipt' => ['receipt', 'GET', true],
     'sales.recent' => ['recent', 'GET', true],
 ];
-$route = Http::query('r');
+$route = Http::query('api');
 if (!isset($routes[$route])) {
     ApiController::fail('not_found', 'Unknown API endpoint.', 404);
 }

@@ -18,7 +18,7 @@ reports, settings, branding) stays in the MotoSupply website.
 
 ## How it works (and what it never does)
 
-- The app talks only to your MotoSupply website (`api.php`), over HTTPS. It never connects to the database.
+- The app talks only to your MotoSupply website (its cashier API at `index.php?api=…`), over HTTPS. It never connects to the database.
 - **The server decides everything that matters:**
   - prices, stock, totals, change and permissions;
   - whether a sale is complete. The app shows "Sale completed" only after the server confirms it was saved.
@@ -33,7 +33,7 @@ reports, settings, branding) stays in the MotoSupply website.
 
 ## Setup (administrator / IT)
 
-1. **Update the website first.** Install MotoSupply **1.4.0** (it adds the `api.php` cashier interface), then open the website once in a browser so its database update runs.
+1. **Update the website first.** Install MotoSupply **1.4.0** (it adds the cashier interface the app uses), then open the website once in a browser so its database update runs.
 2. **Turn on HTTPS:** Settings → System Check → **Require HTTPS (production)**. The app refuses plain `http://` addresses.
 3. **Cashier accounts:** Settings → Users. The **Cashier** role already has the right permissions. Discounts need the "Apply discounts" permission.
 4. **Install the app** on the counter PC: run `MotoSupply-POS-Setup.exe` (or copy the portable `.exe`).

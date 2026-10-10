@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * 1.4.0 — Sign-in tokens for the cashier desktop app (api.php).
+ * 1.4.0 — Sign-in tokens for the cashier desktop app (index.php?api=…).
  * Only a SHA-256 hash of each token is stored; the token itself exists only in the app's memory.
  * Idempotent and additive: safe to run again, never touches business data.
  */

@@ -13,7 +13,7 @@ Final `tests/verify_release.sh` run on clean extractions of these ZIPs: **RELEAS
 | HTTP security | 17/17, 17/17 | 17/17 |
 | HTTPS production mode | — | 7/7 |
 | Roles on every route, CSRF, voids, branding, theme, cron URL | 36/36 | not run |
-| **New:** cashier API (`api.php`) on a fresh ZIP install | 32/32 | not run |
+| **New:** cashier API on a fresh ZIP install | 32/32 | not run |
 | Upgrade: real 1.2.0 → this update ZIP by hand → in-app update → restore | 31/31 | not run |
 | Service tests / 1.3 service tests | 37/37, 47/47 | 37/37, 47/47 |
 | Updater tests | 13/13 | skipped (no `zip` extension in the test image) |

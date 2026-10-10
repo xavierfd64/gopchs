@@ -32,7 +32,7 @@ All results below come from tests that were actually run. Nothing was tested on 
   - Only a hash is stored. They work in `Authorization` or `X-MotoSupply-Token`.
   - Expiry: idle, absolute (12 h) and a sliding window.
   - Revocation: sign-out, deactivation, removal of a permission. Rate limit returns 429.
-- **The website does not accept desktop tokens:** admin pages redirect to sign-in. No admin endpoints exist in `api.php`.
+- **The website does not accept desktop tokens:** admin pages redirect to sign-in. The cashier API has no admin endpoints.
 - **Checkout:**
   - Server prices are used (a client price of 0.01 is ignored).
   - 99-in-stock/sell-100 and short multi-line carts are refused, with the latest stock returned and no partial deduction.

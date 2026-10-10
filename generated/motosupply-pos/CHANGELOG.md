@@ -3,7 +3,7 @@
 ## [1.4.0] — 2026-10-10
 
 ### Added
-- **Cashier API (`api.php`)** for the new MotoSupply POS Windows cashier app. It only offers cashier operations:
+- **Cashier API (`index.php?api=…`)** for the new MotoSupply POS Windows cashier app. It only offers cashier operations:
   - sign in and out;
   - product search, barcode lookup and current stock;
   - checkout;
@@ -16,11 +16,11 @@
 - **Server-side permission checks** on every request. Only active accounts with "Use the POS" and "Record sales" can sign in.
 - **Checkout** uses the same transaction as the web POS: row locks, server prices, stock checks, and idempotent retries.
 - **Checkout status by transaction token**, for answers lost to a network failure or crash.
-- **HTTPS is required** for `api.php` in production mode. It sets no cookies and no sessions.
+- **HTTPS is required** for the cashier API in production mode. It sets no cookies and no sessions.
 - Migration 003 (`api_tokens`).
 
 ### Changed
-- `api.php` is part of the update package and of the required files.
+- The update package contains only application files that MotoSupply 1.3's in-app updater accepts, so sites on 1.3 can install it from Settings → Updates (tested with the real 1.3.0 release).
 - The `Authorization` header is passed to PHP on CGI/FastCGI hosts (`.htaccess`).
 
 ## [1.3.0] — 2026-10-09

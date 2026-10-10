@@ -31,9 +31,9 @@ final class Updater
     public const DOCS = ['UPDATE-README.md', 'CHANGELOG.md'];
     /** Paths an update may write: directory prefixes and exact files. */
     public const ALLOWED_PREFIXES = ['app/', 'assets/', 'database/migrations/'];
-    public const ALLOWED_FILES = ['index.php', 'api.php', '.htaccess', 'database/.htaccess', 'config/.htaccess', 'config/config.sample.php', 'storage/.htaccess', 'uploads/.htaccess'];
+    public const ALLOWED_FILES = ['index.php', '.htaccess', 'database/.htaccess', 'config/.htaccess', 'config/config.sample.php', 'storage/.htaccess', 'uploads/.htaccess'];
     /** Application code captured in the pre-update file backup (restored on failure/rollback). */
-    public const BACKUP_PATHS = ['index.php', 'api.php', '.htaccess', 'app', 'assets', 'database', 'config/.htaccess', 'config/config.sample.php', 'storage/.htaccess', 'uploads/.htaccess'];
+    public const BACKUP_PATHS = ['index.php', '.htaccess', 'app', 'assets', 'database', 'config/.htaccess', 'config/config.sample.php', 'storage/.htaccess', 'uploads/.htaccess'];
 
     /** Base64 Ed25519 public keys of trusted MotoSupply releases (plus optional keys from config). */
     public static function trustedKeys(): array

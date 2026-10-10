@@ -17,7 +17,7 @@ use App\Services\ProductService;
 use App\Services\SaleService;
 
 /**
- * JSON API for the MotoSupply cashier desktop app (entry point: api.php).
+ * JSON API for the MotoSupply cashier desktop app (entry point: index.php?api=<route>, see app/api.php).
  *
  * Only cashier operations are available: sign in/out, product search and barcode lookup,
  * current stock, checkout, and receipts. Every request is authenticated with a short-lived

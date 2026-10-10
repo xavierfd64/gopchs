@@ -115,7 +115,7 @@ const proxyServer = net.createServer((client) => {
   let drop = false;
   client.on('data', (d) => {
     req += d.toString('latin1');
-    if (proxy.mode === 'drop-checkout' && req.includes('r=sales.checkout')) drop = true;
+    if (proxy.mode === 'drop-checkout' && req.includes('api=sales.checkout')) drop = true;
     up.write(d);
   });
   // In drop mode the server has already committed when its answer starts: cut the line right then.

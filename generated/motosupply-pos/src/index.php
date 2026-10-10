@@ -10,6 +10,12 @@ declare(strict_types=1);
 define('MOTO_ROOT', __DIR__);
 require MOTO_ROOT . '/app/bootstrap.php';
 
+// Cashier desktop app API (index.php?api=<route>): JSON only, no sessions or cookies.
+if (isset($_GET['api'])) {
+    require MOTO_ROOT . '/app/api.php';
+    exit;
+}
+
 use App\Core\Auth;
 use App\Core\Config;
 use App\Core\Csrf;

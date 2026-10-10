@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * HTTP tests for the cashier desktop API (api.php) against a real web server and a fresh install.
+ * HTTP tests for the cashier desktop API (index.php?api=…) against a real web server and a fresh install.
  *
  *   php tests/api_test.php <base-url> <database> [<https-base-url>]
  *
@@ -66,7 +66,7 @@ function uuid4(): string
 function api(string $method, string $route, array $q = [], ?array $body = null, ?string $token = null, array $headers = [], ?string $base = null): array
 {
     global $B, $allBodies;
-    $ch = curl_init(($base ?? $B) . '/api.php?' . http_build_query(['r' => $route] + $q));
+    $ch = curl_init(($base ?? $B) . '/index.php?' . http_build_query(['api' => $route] + $q));
     $h = $headers;
     if ($token !== null) {
         $h[] = 'Authorization: Bearer ' . $token;
@@ -141,7 +141,7 @@ test('Unknown endpoints, wrong methods and non-JSON bodies are refused', functio
     eq('not_found', errCode(api('GET', 'users')));
     eq('not_found', errCode(api('GET', 'settings.save')));
     eq(405, api('GET', 'sales.checkout')['code']);
-    $ch = curl_init($GLOBALS['B'] . '/api.php?r=auth.login');
+    $ch = curl_init($GLOBALS['B'] . '/index.php?api=auth.login');
     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => 'username=a&password=b', CURLOPT_RETURNTRANSFER => true]);
     curl_exec($ch);
     eq(415, curl_getinfo($ch, CURLINFO_RESPONSE_CODE));
@@ -343,7 +343,7 @@ test('Concurrent checkouts of the last 2 units from 6 tills: exactly 2 succeed',
     $mh = curl_multi_init();
     $hs = [];
     for ($i = 0; $i < 6; $i++) {
-        $ch = curl_init("$B/api.php?r=sales.checkout");
+        $ch = curl_init("$B/index.php?api=sales.checkout");
         curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Authorization: Bearer ' . $T],
             CURLOPT_POSTFIELDS => json_encode(['items' => [['product_id' => $P['last'], 'quantity' => 1]], 'discount_type' => 'none', 'discount_value' => '0', 'tendered' => '1000', 'client_token' => uuid4()])]);

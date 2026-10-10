@@ -1,4 +1,4 @@
-// HTTPS client for the MotoSupply server API (api.php). Runs only in the main process: the
+// HTTPS client for the MotoSupply server API (index.php?api=…). Runs only in the main process: the
 // sign-in token never reaches the screen (renderer) and is kept in memory only.
 
 import { net } from 'electron';
@@ -17,7 +17,7 @@ export class ApiClient {
 
   async request<T = Record<string, unknown>>(method: 'GET' | 'POST', route: string,
     opts: { query?: Record<string, string>; body?: unknown; auth?: boolean; timeoutMs?: number } = {}): Promise<ApiResult<T>> {
-    const qs = new URLSearchParams({ r: route, ...(opts.query ?? {}) });
+    const qs = new URLSearchParams({ api: route, ...(opts.query ?? {}) });
     const headers: Record<string, string> = { Accept: 'application/json', 'User-Agent': this.userAgent };
     if (opts.auth !== false) {
       if (!this.token) return { ok: false, status: 401, error: { code: 'unauthenticated', message: 'Please sign in.' } };
@@ -31,7 +31,7 @@ export class ApiClient {
     }
     let res: Response;
     try {
-      res = await net.fetch(`${this.base}/api.php?${qs.toString()}`, {
+      res = await net.fetch(`${this.base}/index.php?${qs.toString()}`, {
         method, headers, body,
         redirect: 'error', // never follow a redirect to another address
         cache: 'no-store',

@@ -19,7 +19,7 @@ DirectoryIndex index.php
   </IfModule>
 </FilesMatch>
 
-# Pass the Authorization header to PHP for the cashier desktop app (api.php) on CGI/FastCGI hosts.
+# Pass the Authorization header to PHP for the cashier desktop app (index.php?api=…) on CGI/FastCGI hosts.
 <IfModule mod_setenvif.c>
   SetEnvIf Authorization "(.+)" HTTP_AUTHORIZATION=$1
 </IfModule>

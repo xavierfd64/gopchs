@@ -171,7 +171,7 @@ From 1.4.0, cashiers can use the **MotoSupply POS** Windows app at the counter, 
 - **Connect:** on first start, enter this website's **https://** address. To lock the address for all users, create `C:\ProgramData\MotoSupply POS\config.json` with `{ "server_url": "https://your-site" }`.
 - **Sign in:** cashiers use their normal accounts. Only active accounts with the "Use the POS" and "Record sales" permissions can sign in.
 - **What the website controls:** prices, stock, totals and permissions (rechecked on every request), and the receipt settings (paper, logo, automatic printing) in Settings → Receipt & printing.
-- **Server side:** the app talks only to `api.php` on this website, over HTTPS (required once "Require HTTPS" is on). Sign-in tokens last 30 minutes without use, 12 hours at most. They end at sign-out, deactivation or a password change, and only their hash is stored.
+- **Server side:** the app talks only to this website's cashier API (`index.php?api=…`), over HTTPS (required once "Require HTTPS" is on). Sign-in tokens last 30 minutes without use, 12 hours at most. They end at sign-out, deactivation or a password change, and only their hash is stored.
 
 Full instructions: `desktop/README.md` (included with the app download).
 

@@ -39,7 +39,7 @@ export function validateServerUrl(input: string, allowInsecureLocalhost: boolean
     return { ok: false, error: 'The address must start with https://' };
   }
   let path = u.pathname.replace(/\/+$/, '');
-  // Accept the address of a page inside MotoSupply too (…/index.php, …/api.php).
+  // Accept the address of a page inside MotoSupply too (…/index.php).
   path = path.replace(/\/(index|api)\.php$/i, '');
   if (!/^[A-Za-z0-9._~\-/%]*$/.test(path)) {
     return { ok: false, error: 'The address contains unsupported characters.' };
